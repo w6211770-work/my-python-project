@@ -17,7 +17,7 @@ from tkinter import ttk
 
 def write_file(filename, code):
     # 新しいPythonファイルを作成して内容を書き込むコード
-    with open(filename, "w", encoding="utf-8") as f:
+    with open(f'{filename}.py', "w", encoding="utf-8") as f:
         f.write(code)
     print(f"{filename} を作成しました。")
 
@@ -58,6 +58,7 @@ def create_tab(notebook, tab_text, label_text, button_text=None, button_command=
 
     return tab
 
+
 def create_gui_window(title_name,
                       tab_text_for_create_new,
                       label_text_for_create_new,
@@ -87,50 +88,17 @@ def create_gui_window(title_name,
     def show_value():
         value = entry.get()
         print("入力された値:", value)
+        write_file(filename=value, code='')
 
-    # 左タブを作成
-    tab_for_create_new = ttk.Frame(notebook)
-    notebook.add(tab_for_create_new, text=tab_text_for_create_new)
-    label_for_create_new = tkinter.Label(tab_for_create_new, text=label_text_for_create_new)
-    label_for_create_new.pack(padx=10, pady=10)
-
-    # 左タブ専用ボタン
-    button_create = tkinter.Button(tab_for_create_new, text=tab_text_for_create_new, command=show_value)
-    button_create.pack(padx=10, pady=10)
-
+    # タブを追加
+    tab_for_create_new = create_tab(notebook, tab_text_for_create_new, label_text_for_create_new, tab_text_for_create_new, show_value)
     # Entry（入力ボックス）
     entry = tkinter.Entry(tab_for_create_new)
     entry.pack(padx=10, pady=10)
 
-    # 中央タブを作成
-    tab_for_file_editing = ttk.Frame(notebook)
-    notebook.add(tab_for_file_editing, text=tab_text_for_file_editing)
-    label_for_file_editing = tkinter.Label(tab_for_file_editing, text=label_text_for_file_editing)
-    label_for_file_editing.pack(padx=10, pady=10)
-
-    # 中央タブ専用ボタン
-    button_edit = tkinter.Button(tab_for_file_editing, text=tab_text_for_file_editing)
-    button_edit.pack(padx=10, pady=10)
-
-    # 右タブを作成
-    tab_for_run_python_file = ttk.Frame(notebook)
-    notebook.add(tab_for_run_python_file, text=tab_text_for_run_python_file)
-    label_for_run_python_file = tkinter.Label(tab_for_run_python_file, text=label_text_for_run_python_file)
-    label_for_run_python_file.pack(padx=10, pady=10)
-
-    # 右タブ専用ボタン
-    button_run = tkinter.Button(tab_for_run_python_file, text=tab_text_for_run_python_file)
-    button_run.pack(padx=10, pady=10)
-
-    # 設定タブを作成
-    tab_for_setting = ttk.Frame(notebook)
-    notebook.add(tab_for_setting, text=tab_text_for_setting)
-    label_for_setting = tkinter.Label(tab_for_setting, text=label_text_setting)
-    label_for_setting.pack(padx=10, pady=10)
-
-    # 設定タブ専用ボタン
-    button_setting = tkinter.Button(tab_for_setting, text=tab_text_for_setting)
-    button_setting.pack(padx=10, pady=10)
+    tab_for_file_editing = create_tab(notebook, tab_text_for_file_editing, label_text_for_file_editing, tab_text_for_file_editing)
+    tab_for_run_python_file = create_tab(notebook, tab_text_for_run_python_file, label_text_for_run_python_file, tab_text_for_run_python_file)
+    tab_for_setting = create_tab(notebook, tab_text_for_setting, label_text_setting, tab_text_for_setting)
 
     root.mainloop()
 
