@@ -44,13 +44,47 @@ def create_file(folder_path, entry):
 
 # =================================================================
 # Pythonファイルの編集
-# def save_combobox_values(comboboxes, filename="いいい.txt"):
-#     """複数コンボボックスの値を順番に取得してテキストファイルに保存"""
-#     with open(filename, "w", encoding="utf-8") as f:
-#         for combo in comboboxes:
-#             value = combo.get()
-#             f.write(value + "\n")
-#     print(f"{filename} に保存しました")
+def save_combobox_values(comboboxes, filepath):
+    """複数コンボボックスの値を順番に取得してテキストファイルに保存"""
+    with open(filepath, "w", encoding="utf-8") as f:
+        for combo in comboboxes:
+            value = combo
+            f.write(value + "\n")
+    print(f"save_combobox_values: {filepath} に保存しました")
+
+
+# def load_values(filepath):
+#     with open(filepath, "r", encoding="utf-8") as f:
+#         lines = f.read().splitlines()
+#         for cb, val in zip(comboboxes, lines):
+#             cb.set(val)  # 順番通りに復元
+
+
+def select_value(line):
+    return_select_value = ''
+    # ["どこをクリック", "どこへマウスを移動"]
+    if 'moveTo' in line:
+        return_select_value = 'どこへマウスを移動'
+    elif 'scroll' in line:
+        return_select_value = 'どれくらいスクロール'
+    elif 'sleep' in line:
+        return_select_value = '何秒待つ'
+    return return_select_value
+
+
+def get_dropdown_info(tab, dropdown):
+    # タブ内のウィジェットを取得して Combobox だけフィルタリング
+    comboboxes = [w for w in tab.winfo_children() if isinstance(w, ttk.Combobox)]
+    values = [cb.get() for cb in comboboxes if cb.get() != dropdown]  # 順番通りに値を取得
+    print(f'get_dropdown_info 順番通りの値: ', values)
+    return values
+
+
+def save_file(dropdown, dropdowns, folder_path):
+    filename = dropdown.get()
+    filepath = folder_path / filename
+    save_combobox_values(comboboxes=dropdowns, filepath=filepath)
+    print(f'save_file: {folder_path}フォルダに{filename}を保存しました')
 
 
 def edit_file(filename):
@@ -61,9 +95,9 @@ def edit_selected_file(dropdown, tab, folder_path):
     filename = dropdown.get()
     filepath = folder_path / filename
     print(f'edit_selected_fileで編集するファイルパス filepath: {filepath}')
-    create_dropdowns_from_textfile(tab=tab, filepath=filepath)
+    dropdowns = create_dropdowns_from_textfile(tab=tab, filepath=filepath, filename=filename)
     edit_file(filename=filename)
-
+    return dropdowns
 # =================================================================
 
 
@@ -107,7 +141,7 @@ def create_button(tab, button_text, button_command=None):
     button = tkinter.Button(tab, text=button_text, command=button_command)
     button.pack(padx=10, pady=10)
 
-    return button
+    # return button
 
 
 def create_entry(tab):
@@ -194,23 +228,28 @@ def create_file_dropdown(tab, folder_path):
     return dropdown
 
 
-def create_dropdowns_from_textfile(tab, filepath):
+def create_dropdowns_from_textfile(tab, filepath, filename):
     # テキストファイルを読み込み、行ごとのリストを作成
     with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
     # 各行に対応するプルダウンを作成
     dropdowns = []
+    values = ['どこへマウスを移動', 'どれくらいスクロール', '何秒待つ']
     for i, line in enumerate(lines, start=1):
         # ラベル（行の内容を表示）
         label = tkinter.Label(tab, text=line.strip())
         label.pack(anchor="w", padx=10, pady=2)
-
+        print(f'line: {line}')
+        print(f'line.strip(): {line.strip()}')
         # プルダウン（選択肢は共通）
-        combo = ttk.Combobox(tab, values=["どこをクリック", "どこへマウスを移動"], state="readonly")
-        combo.pack(anchor="w", padx=20, pady=2)
+        if line.strip() != filename and 'import' not in line.strip():
+            combo = ttk.Combobox(tab, values=values, state="readonly")
+            set_value = select_value(line.strip())
+            combo.set(set_value)
+            combo.pack(anchor="w", padx=20, pady=2)
 
-        dropdowns.append(combo)
+            dropdowns.append(combo)
 
     return dropdowns
 
@@ -218,8 +257,8 @@ def create_dropdowns_from_textfile(tab, filepath):
 def create_gui_window(title_name,
                       tab_text_for_create_new,
                       label_text_for_create_new,
-                      tab_text_for_file_editing,
-                      label_text_for_file_editing,
+                      tab_text_for_edit_file,
+                      label_text_for_edit_file,
                       tab_text_for_run_file,
                       label_text_for_run_file,
                       tab_text_for_delete_file,
@@ -258,20 +297,32 @@ def create_gui_window(title_name,
                             entry=entry_for_create_new_tab_decoration))
 
     # 編集タブ
-    tab_for_file_editing = create_scrollable_tab(notebook=notebook,
-                                                 tab_text=tab_text_for_file_editing)
+    tab_for_edit_file = create_scrollable_tab(notebook=notebook,
+                                              tab_text=tab_text_for_edit_file)
 
-    create_label(tab=tab_for_file_editing, label_text=label_text_for_file_editing)
+    create_label(tab=tab_for_edit_file, label_text=label_text_for_edit_file)
 
-    dropdown_for_edit_file = create_file_dropdown(tab=tab_for_file_editing, folder_path=folder_path)
+    dropdown_for_edit_file = create_file_dropdown(tab=tab_for_edit_file, folder_path=folder_path)
 
-    create_button(tab=tab_for_file_editing,
-                  button_text=tab_text_for_file_editing,
-                  button_command=lambda: edit_selected_file(
-                        dropdown=dropdown_for_edit_file,
-                        tab=tab_for_file_editing,
-                        folder_path=folder_path))
+    create_button(tab=tab_for_edit_file,
+                              button_text=tab_text_for_edit_file,
+                              button_command=lambda: edit_selected_file(
+                                dropdown=dropdown_for_edit_file,
+                                tab=tab_for_edit_file,
+                                folder_path=folder_path))
 
+    result_holder = {}
+
+    def on_button_click():
+        dropdown = dropdown_for_edit_file.get()
+        result_holder["dropdowns"] = get_dropdown_info(tab=tab_for_edit_file,dropdown=dropdown)
+        save_file(dropdown=dropdown_for_edit_file,
+                  dropdowns=result_holder["dropdowns"],
+                  folder_path=folder_path)
+
+    create_button(tab=tab_for_edit_file,
+                  button_text='保存',
+                  button_command=lambda: on_button_click())
     # 実行タブ
     tab_for_run_file = create_tab(notebook=notebook,
                                   tab_text=tab_text_for_run_file)
@@ -318,8 +369,8 @@ def create_gui_window(title_name,
 create_gui_window(title_name='pyautogui_DIY',
                   tab_text_for_create_new='新規作成',
                   label_text_for_create_new='新規作成するファイル名を入力してください',
-                  tab_text_for_file_editing='編集',
-                  label_text_for_file_editing='編集するファイルを選択してください',
+                  tab_text_for_edit_file='編集',
+                  label_text_for_edit_file='編集するファイルを選択してください',
                   tab_text_for_run_file='実行',
                   label_text_for_run_file='実行するファイルを選択してください',
                   tab_text_for_delete_file='削除',
