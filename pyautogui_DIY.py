@@ -81,6 +81,9 @@ def edit_selected_file(dropdown, parent, values, folder_path):
     filename = dropdown.get()
     filepath = folder_path / filename
     print(f'edit_selected_fileで編集するファイルパス filepath: {filepath}')
+    remove_dropdown(parent=parent, exclude_dropdown=dropdown)
+    exclude_label = get_labels_in_tab(parent=parent)
+    remove_label(parent=parent, exclude_label=exclude_label)
     dropdowns = create_dropdowns_from_textfile(parent=parent, values=values, filepath=filepath, filename=filename)
     frame = create_frame(parent)
     dropdown = create_dropdown(parent=parent, values=values, on_select=on_select, anchor='nw')
@@ -123,18 +126,52 @@ def delete_selected_file(dropdown):
 
 # =================================================================
 # GUIウィジェットの表示
+def get_dropdowns_in_tab(parent):
+    dropdowns = [child for child in parent.winfo_children() if isinstance(child, (tkinter.OptionMenu, ttk.Combobox))]
 
-def remove_dropdown(dropdown=None, dropdowns=None):
-    # ウィジェットが存在するか確認
-    if dropdown and dropdown.winfo_exists():
-        dropdown.destroy()
+    return dropdowns
 
-    # まとめて削除
-    if dropdowns:
+
+def get_labels_in_tab(parent):
+    labels = [child for child in parent.winfo_children() if isinstance(child, (tkinter.Label, ttk.Label))]
+
+    return labels
+
+
+def remove_dropdown(parent, exclude_dropdown=None):
+    dropdowns = get_dropdowns_in_tab(parent)
+
+    if exclude_dropdown:
+        # 除外対象以外を削除
+        for d in dropdowns:
+            if d.winfo_exists() and d is not exclude_dropdown:
+                d.destroy()
+        # exclude を残すためにリストを再構築
+        dropdowns[:] = [d for d in dropdowns if d is exclude_dropdown]
+    else:
+        # 全部削除
         for d in dropdowns:
             if d.winfo_exists():
                 d.destroy()
         dropdowns.clear()
+
+
+def remove_label(parent, exclude_label=None):
+    labels = get_labels_in_tab(parent)
+
+    if exclude_label:
+        # 除外対象以外を削除
+        for d in labels:
+            if d.winfo_exists() and d is not exclude_label:
+                d.destroy()
+        # exclude を残すためにリストを再構築
+        labels[:] = [d for d in labels if d is exclude_label]
+    else:
+        # 全部削除
+        for d in labels:
+            if d.winfo_exists():
+                d.destroy()
+        labels.clear()
 
 
 def create_button(parent, button_text, button_command=None):
@@ -370,8 +407,7 @@ def create_gui_window(title_name,
                             entry=entry_for_create_new_tab_decoration))
 
     # 編集タブ
-    tab_for_edit_file = create_scrollable_tab(notebook=notebook,
-                                              tab_text=tab_text_for_edit_file)
+    tab_for_edit_file = create_scrollable_tab(notebook=notebook, tab_text=tab_text_for_edit_file)
 
     frame_for_edit_file_tab_decoration = create_frame(parent=tab_for_edit_file)
 
@@ -458,5 +494,3 @@ create_gui_window(title_name='pyautogui_DIY',
                   label_text_for_setting='設定を行ってください',
                   folder_path=Path('.') / 'python_scripts',
                   choices=['どこへマウスを移動', 'どれくらいスクロール', '何秒待つ'])
-
-●remove_dropdown関数は作成したが、まだ処理に組み込んでいない。
