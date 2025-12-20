@@ -78,16 +78,17 @@ def save_file(dropdown, dropdowns, folder_path):
 
 
 def edit_selected_file(dropdown, parent, values, folder_path):
+    # parent=tab_for_edit_file
     filename = dropdown.get()
     filepath = folder_path / filename
     print(f'edit_selected_fileで編集するファイルパス filepath: {filepath}')
-    remove_dropdown(parent=parent, exclude_dropdown=dropdown)
-    exclude_label = get_labels_in_tab(parent=parent)
-    remove_label(parent=parent, exclude_label=exclude_label)
-    dropdowns = create_dropdowns_from_textfile(parent=parent, values=values, filepath=filepath, filename=filename)
-    frame = create_frame(parent)
-    dropdown = create_dropdown(parent=parent, values=values, on_select=on_select, anchor='nw')
-    # return dropdowns
+
+    # 前のファイルのドロップダウン等が表示されていればフレームごとドロップダウン等を消去
+    exclude_frame = dropdown.master
+    remove_frame(parent=parent, exclude_frame=exclude_frame)
+
+    # 編集するファイルを読み込みドロップダウンを作成
+    create_dropdowns_from_textfile(parent=parent, values=values, filepath=filepath, filename=filename)
 # =================================================================
 
 
@@ -126,117 +127,105 @@ def delete_selected_file(dropdown):
 
 # =================================================================
 # GUIウィジェットの表示
-def get_dropdowns_in_tab(parent):
-    dropdowns = [child for child in parent.winfo_children() if isinstance(child, (tkinter.OptionMenu, ttk.Combobox))]
+def get_all_frames(widget):
+    frames = []
+    for child in widget.winfo_children():
+        # Frame なら追加
+        if isinstance(child, tkinter.Frame):
+            frames.append(child)
+        # 子供の中も探索（再帰）
+        frames.extend(get_all_frames(child))
+    return frames
 
-    return dropdowns
 
+def remove_frame(parent, exclude_frame=None):
+    frames = get_all_frames(parent)
 
-def get_labels_in_tab(parent):
-    labels = [child for child in parent.winfo_children() if isinstance(child, (tkinter.Label, ttk.Label))]
-
-    return labels
-
-
-def remove_dropdown(parent, exclude_dropdown=None):
-    dropdowns = get_dropdowns_in_tab(parent)
-
-    if exclude_dropdown:
+    if exclude_frame:
         # 除外対象以外を削除
-        for d in dropdowns:
-            if d.winfo_exists() and d is not exclude_dropdown:
-                d.destroy()
-        # exclude を残すためにリストを再構築
-        dropdowns[:] = [d for d in dropdowns if d is exclude_dropdown]
+        for f in frames:
+            if f.winfo_exists() and f is not exclude_frame:
+                f.destroy()
     else:
         # 全部削除
-        for d in dropdowns:
-            if d.winfo_exists():
-                d.destroy()
-        dropdowns.clear()
+        for f in frames:
+            if f.winfo_exists():
+                f.destroy()
 
-
-def remove_label(parent, exclude_label=None):
-    labels = get_labels_in_tab(parent)
-
-    if exclude_label:
-        # 除外対象以外を削除
-        for d in labels:
-            if d.winfo_exists() and d is not exclude_label:
-                d.destroy()
-        # exclude を残すためにリストを再構築
-        labels[:] = [d for d in labels if d is exclude_label]
-    else:
-        # 全部削除
-        for d in labels:
-            if d.winfo_exists():
-                d.destroy()
-        labels.clear()
-
-
-def create_button(parent, button_text, button_command=None):
-    button = tkinter.Button(parent, text=button_text, command=button_command)
-    apply_pack(widget=button, anchor='nw')
-
-
-def create_frame(parent):
-    frame = tkinter.Frame(parent)
-    apply_pack(widget=frame, anchor="nw")
-
-    return frame
-
-
-def create_entry(parent):
-    entry = tkinter.Entry(parent)
-    apply_pack(widget=entry, side='left')
-
-    return entry
-
-
-def create_label(parent, label_text):
-    label = tkinter.Label(parent, text=label_text)
-    apply_pack(widget=label, anchor="nw",)
-
-
-def create_tab(notebook, tab_text):
-    tab = ttk.Frame(notebook)
-    notebook.add(tab, text=tab_text)
-
-    return tab
-
-
-def create_canvas(parent):
-    # キャンバスの枠線の表示を消す
-    canvas = tkinter.Canvas(parent, highlightthickness=0)
-    apply_pack(widget=canvas, side="left", fill="both", expand=True)
-
-    return canvas
-
-
-def create_container(parent, tab_text):
-    container = ttk.Frame(parent)
-    parent.add(container, text=tab_text)
-
-    return container
-
-
-def create_scrollbar(container, canvas):
-    scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
-    apply_pack(widget=scrollbar, side="right", fill="y")
-
-    return scrollbar
+# def get_dropdowns_in_tab(parent):
+#     dropdowns = [child for child in parent.winfo_children() if isinstance(child, (tkinter.OptionMenu, ttk.Combobox))]
+#
+#     return dropdowns
+# def get_all_dropdowns(widget):
+#     dropdowns = []
+#     for child in widget.winfo_children():
+#         # Combobox なら追加
+#         if isinstance(child, ttk.Combobox):
+#             dropdowns.append(child)
+#         # 子供の中も探索（再帰）
+#         dropdowns.extend(get_all_dropdowns(child))
+#     return dropdowns
+#
+#
+# def get_labels_in_tab(parent):
+#     labels = [child for child in parent.winfo_children() if isinstance(child, (tkinter.Label, ttk.Label))]
+#
+#     return labels
+#
+#
+# def remove_dropdown(parent, exclude_dropdown=None):
+#     dropdowns = get_all_dropdowns(parent)
+#
+#     if exclude_dropdown:
+#         # 除外対象以外を削除
+#         for d in dropdowns:
+#             if d.winfo_exists() and d is not exclude_dropdown:
+#                 d.destroy()
+#         # exclude を残すためにリストを再構築
+#         dropdowns[:] = [d for d in dropdowns if d is exclude_dropdown]
+#     else:
+#         # 全部削除
+#         for d in dropdowns:
+#             if d.winfo_exists():
+#                 d.destroy()
+#         dropdowns.clear()
+#
+#
+# def remove_label(parent, exclude_label=None):
+#     labels = get_labels_in_tab(parent)
+#
+#     if exclude_label:
+#         # 除外対象以外を削除
+#         for d in labels:
+#             if d.winfo_exists() and d is not exclude_label:
+#                 d.destroy()
+#         # exclude を残すためにリストを再構築
+#         labels[:] = [d for d in labels if d is exclude_label]
+#     else:
+#         # 全部削除
+#         for d in labels:
+#             if d.winfo_exists():
+#                 d.destroy()
+#         labels.clear()
 
 
 def create_scrollable_tab(notebook, tab_text):
-    container = create_container(parent=notebook, tab_text=tab_text)
+    # コンテナ作成
+    container = ttk.Frame(notebook)
+    notebook.add(container, text=tab_text)
+    notebook.select(container)
 
-    canvas = create_canvas(parent=container)
+    # キャンバス作成
+    canvas = tkinter.Canvas(container, highlightthickness=0)
+    canvas.pack(side="left", fill="both", expand=True)
 
-    scrollbar = create_scrollbar(container=container, canvas=canvas)
+    # スクロールバー作成
+    scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+    scrollbar.pack(side="right", fill="y")
 
     canvas.configure(yscrollcommand=scrollbar.set)
 
-    scrollable_frame = create_frame(parent=canvas)
+    scrollable_frame = tkinter.Frame(canvas)
 
     scroll_window_id = canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
 
@@ -268,90 +257,102 @@ def create_file_dropdown(parent, folder_path):
     # フォルダ内のファイル一覧を取得
     files = os.listdir(folder_path)
 
-    dropdown = create_dropdown(parent=parent, values=files, on_select=None, anchor="nw", padx=5, pady=5)
+    dropdown = ttk.Combobox(parent, values=files, state="readonly")
+    dropdown.pack(anchor='nw')
 
     return dropdown
 
 
 def create_dropdowns_from_textfile(parent, values, filepath, filename):
-    # テキストファイルを読み込み、行ごとのリストを作成
+    dropdowns = []
+
     with open(filepath, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
-    # 各行に対応するプルダウンを作成
-    dropdowns = []
     for i, line in enumerate(lines, start=1):
-        # ラベル（行の内容を表示）
         text = line.strip()
-        create_label(parent=parent, label_text=text)
-        # プルダウン（選択肢は共通）
-        if line.strip() != filename and 'import' not in line.strip():
-            dropdown = create_dropdown(parent=parent, values=values, anchor='nw')
-            set_value = select_value(line.strip())
-            dropdown.set(set_value)
+
+        if text != filename and 'import' not in text:
+            # 新しい行フレーム
+            row_frame = tkinter.Frame(parent)
+            row_frame.pack(fill='x', anchor='nw')
+
+            # ラベル
+            label = tkinter.Label(row_frame, text=text)
+            label.pack(anchor='nw')
+
+            # ドロップダウン
+            dropdown = ttk.Combobox(row_frame, values=values, state="readonly")
+            dropdown.pack(side='left')
+            dropdown.set(select_value(text))
             dropdowns.append(dropdown)
 
+            # +ボタン（行追加）
+            add_button = tkinter.Button(
+                row_frame,
+                text="+",
+                command=lambda fr=row_frame: add_widget_below(fr, values)
+            )
+            add_button.pack(side='left')
+
+            # -ボタン（行削除）
+            delete_button = tkinter.Button(
+                row_frame,
+                text="−",
+                command=lambda fr=row_frame: delete_row(fr)
+            )
+            delete_button.pack(side='left')
+
     return dropdowns
-
-
-def create_expandable_dropdown(parent, values):
-    """ドロップダウンを作成し、選択時に右に新しいドロップダウンを追加"""
-    # 1行分の枠を作る
-    frame = create_frame(parent=parent)
-    apply_pack(widget=frame, fill="x")
-
-    dropdown = create_dropdown(parent=frame, values=values, on_select=on_select, side='left')
-
-    return dropdown
-
-
-def apply_pack(widget,
-               side=None, anchor=None,
-               fill=None, expand=None,
-               padx=5, pady=5,
-               ipadx=None, ipady=None,
-               before=None, after=None, in_=None):
-    """pack のオプションをまとめて適用するヘルパー関数"""
-
-    pack_options = {
-        "side": side,
-        "anchor": anchor,
-        "fill": fill,
-        "expand": expand,
-        "padx": padx,
-        "pady": pady,
-        "ipadx": ipadx,
-        "ipady": ipady,
-        "before": before,
-        "after": after,
-        "in_": in_
-    }
-
-    widget.pack(**pack_options)
-
-
-def create_dropdown(parent, values, on_select=None, side=None, anchor=None, padx=None, pady=None):
-    combo = ttk.Combobox(parent, values=values, state="readonly")
-
-    apply_pack(combo, side=side, anchor=anchor, padx=padx, pady=pady)
-
-    if on_select:
-        combo.bind("<<ComboboxSelected>>", lambda e: on_select(parent=parent, dropdown=combo))
-    return combo
 
 
 def on_select(parent, dropdown):
     selected = dropdown.get()
     print(f"選択された値: {selected}")
-
     # このコードはIF文で大幅に修正予定。ドロップダウンの内容に応じて、表示する内容を変える。
     # 例えばマウス移動なら、ｘ座標とｙ座標の数字が入力できるエントリーを作る。
 
     # 右に新しいドロップダウンを追加
     new_values = [f"{selected}_A", f"{selected}_B", f"{selected}_C"]
-    create_dropdown(parent=parent, values=new_values, anchor='nw')
-    # new_dropdown = ttk.Combobox(parent, values=new_values, state="readonly")
-    # new_dropdown.pack(side="left", padx=5)
+    dropdown = ttk.Combobox(parent, values=new_values, state="readonly")
+    dropdown.pack(side='left')
+
+
+def add_widget_below(current_frame, values):
+    # current_frame の親（縦に積んでいる container）
+    parent = current_frame.master
+
+    # 新しい行フレームを作る
+    new_frame = tkinter.Frame(parent)
+
+    # ★ current_frame の直後に挿入
+    new_frame.pack(after=current_frame)
+
+    # 新しいドロップダウンを作る
+    combo = ttk.Combobox(new_frame, values=values, state="readonly")
+    combo.pack(side='left')
+    combo.bind("<<ComboboxSelected>>", lambda e: on_select(parent=new_frame, dropdown=combo))
+
+    # +ボタン（行追加）
+    add_button = tkinter.Button(
+        new_frame,
+        text="+",
+        command=lambda f=new_frame: add_widget_below(f, values)
+    )
+    add_button.pack(side='left')
+
+    # -ボタン（行削除）
+    delete_button = tkinter.Button(
+        new_frame,
+        text="−",
+        command=lambda f=new_frame: delete_row(f)
+    )
+    delete_button.pack(side='left')
+
+
+def delete_row(row_frame):
+    if row_frame.winfo_exists():
+        row_frame.destroy()
 
 
 def create_gui_window(title_name,
@@ -389,40 +390,50 @@ def create_gui_window(title_name,
     style.configure("TNotebook.Tab", font=("Helvetica", 14))
 
     # 新規作成タブ
-    tab_for_create_new = create_tab(notebook=notebook,
-                                    tab_text=tab_text_for_create_new)
+    tab_for_create_new = ttk.Frame(notebook)
+    notebook.add(tab_for_create_new, text=tab_text_for_create_new)
 
-    create_label(parent=tab_for_create_new, label_text=label_text_for_create_new)
+    label_for_create_new = tkinter.Label(tab_for_create_new, text=label_text_for_create_new)
+    label_for_create_new.pack()
 
-    frame_for_create_new_tab_decoration = create_frame(parent=tab_for_create_new)
+    frame_for_create_new_tab_decoration = tkinter.Frame(tab_for_create_new)
+    frame_for_create_new_tab_decoration.pack()
 
-    entry_for_create_new_tab_decoration = create_entry(parent=frame_for_create_new_tab_decoration)
+    entry_for_create_new_tab_decoration = tkinter.Entry(frame_for_create_new_tab_decoration)
+    entry_for_create_new_tab_decoration.pack()
 
-    create_label(parent=frame_for_create_new_tab_decoration, label_text='.py')
+    label_for_create_new_tab_decoration = tkinter.Label(frame_for_create_new_tab_decoration, text='.py')
+    label_for_create_new_tab_decoration.pack()
 
-    create_button(parent=tab_for_create_new,
-                  button_text=tab_text_for_create_new,
-                  button_command=lambda: create_file(
-                            folder_path=folder_path,
-                            entry=entry_for_create_new_tab_decoration))
+    button_for_create_new_tab_decoration = tkinter.Button(frame_for_create_new_tab_decoration,
+                                                          text=tab_text_for_create_new,
+                                                          command=lambda: create_file(
+                                                            folder_path=folder_path,
+                                                            entry=entry_for_create_new_tab_decoration))
+    button_for_create_new_tab_decoration.pack()
 
     # 編集タブ
     tab_for_edit_file = create_scrollable_tab(notebook=notebook, tab_text=tab_text_for_edit_file)
 
-    frame_for_edit_file_tab_decoration = create_frame(parent=tab_for_edit_file)
+    frame_for_edit_file_tab_decoration = tkinter.Frame(tab_for_edit_file)
+    frame_for_edit_file_tab_decoration.pack(anchor='nw')
 
-    create_label(parent=frame_for_edit_file_tab_decoration, label_text=label_text_for_edit_file)
+    label_for_edit_file_tab_decoration = tkinter.Label(frame_for_edit_file_tab_decoration,
+                                                       text=label_text_for_edit_file)
+    label_for_edit_file_tab_decoration.pack()
 
     dropdown_for_edit_file = create_file_dropdown(parent=frame_for_edit_file_tab_decoration, folder_path=folder_path)
+    dropdown_for_edit_file.set('test2.py')
 
     # 編集ボタンの処理
-    create_button(parent=frame_for_edit_file_tab_decoration,
-                  button_text=tab_text_for_edit_file,
-                  button_command=lambda: edit_selected_file(
-                                dropdown=dropdown_for_edit_file,
-                                parent=tab_for_edit_file,
-                                values=choices,
-                                folder_path=folder_path))
+    button_for_edit_file_tab_decoration = tkinter.Button(frame_for_edit_file_tab_decoration,
+                                                         text=tab_text_for_edit_file,
+                                                         command=lambda: edit_selected_file(
+                                                            dropdown=dropdown_for_edit_file,
+                                                            parent=tab_for_edit_file,
+                                                            values=choices,
+                                                            folder_path=folder_path))
+    button_for_edit_file_tab_decoration.pack()
 
     # 保存ボタンの処理
     result_holder = {}
@@ -434,41 +445,47 @@ def create_gui_window(title_name,
                   dropdowns=result_holder["dropdowns"],
                   folder_path=folder_path)
 
-    create_button(parent=frame_for_edit_file_tab_decoration,
-                  button_text='保存',
-                  button_command=lambda: on_button_click())
+    save_button_for_edit_file_tab_decoration = tkinter.Button(frame_for_edit_file_tab_decoration,
+                                                              text='保存',
+                                                              command=lambda: on_button_click())
+    save_button_for_edit_file_tab_decoration.pack()
 
     # 実行タブ
-    tab_for_run_file = create_tab(notebook=notebook,
-                                  tab_text=tab_text_for_run_file)
+    tab_for_run_file = ttk.Frame(notebook)
+    notebook.add(tab_for_run_file, text=tab_text_for_run_file)
 
-    create_label(parent=tab_for_run_file, label_text=label_text_for_run_file)
+    label_for_run_file = tkinter.Label(tab_for_run_file, text=label_text_for_run_file)
+    label_for_run_file.pack()
 
     dropdown_for_run_file = create_file_dropdown(parent=tab_for_run_file, folder_path=folder_path)
 
-    create_button(parent=tab_for_run_file,
-                  button_text=tab_text_for_run_file,
-                  button_command=lambda: run_selected_file(
-                        dropdown=dropdown_for_run_file))
+    button_for_run_file = tkinter.Button(tab_for_run_file,
+                                         text=tab_text_for_run_file,
+                                         command=lambda: run_selected_file(
+                                            dropdown=dropdown_for_run_file))
+    button_for_run_file.pack()
 
     # 削除タブ
-    tab_for_delete_file = create_tab(notebook=notebook,
-                                     tab_text=tab_text_for_delete_file)
+    tab_for_delete_file = ttk.Frame(notebook)
+    notebook.add(tab_for_delete_file, text=tab_text_for_delete_file)
 
-    create_label(parent=tab_for_delete_file, label_text=label_text_for_delete_file)
+    label_for_delete_file = tkinter.Label(tab_for_delete_file, text=label_text_for_delete_file)
+    label_for_delete_file.pack()
 
     dropdown_for_delete_file = create_file_dropdown(parent=tab_for_delete_file, folder_path=folder_path)
 
-    create_button(parent=tab_for_delete_file,
-                  button_text=tab_text_for_delete_file,
-                  button_command=lambda: delete_selected_file(
-                        dropdown=dropdown_for_delete_file))
+    button_for_delete_file = tkinter.Button(tab_for_delete_file,
+                                            text=tab_text_for_delete_file,
+                                            command=lambda: delete_selected_file(
+                                                dropdown=dropdown_for_delete_file))
+    button_for_delete_file.pack()
 
     # 設定タブ
-    tab_for_setting = create_tab(notebook=notebook,
-                                 tab_text=tab_text_for_setting)
+    tab_for_setting = ttk.Frame(notebook)
+    notebook.add(tab_for_setting, text=tab_text_for_setting)
 
-    create_label(parent=tab_for_setting, label_text=label_text_for_setting)
+    label_for_setting = tkinter.Label(tab_for_setting, text=label_text_for_setting)
+    label_for_setting.pack()
 
     root.mainloop()
 
