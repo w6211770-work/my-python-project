@@ -6,7 +6,7 @@ import tkinter
 from tkinter import ttk
 from pathlib import Path
 import os
-
+import re
 
 # このコードはPC作業をノーコードで自動化すること目的としている。
 # このコードで下記のことが可能である。
@@ -42,39 +42,158 @@ def create_file(folder_path, entry):
 
 # =================================================================
 # Pythonファイルの編集
-def save_combobox_values(comboboxes, filepath):
-    """複数コンボボックスの値を順番に取得してテキストファイルに保存"""
+def save_label_values(labels, filepath):
+    """複数ラベルの値を順番に取得してテキストファイルに保存（空は除外）"""
     with open(filepath, "w", encoding="utf-8") as f:
-        for combo in comboboxes:
-            value = combo
-            f.write(value + "\n")
-    print(f"save_combobox_values: {filepath} に保存しました")
+        for label in labels:
+            value = label.cget('text').strip()  # 空白除去
+            if value:                           # 空ならスキップ
+                f.write(value + "\n")
+    print(f"save_label_values: {filepath} に保存しました")
 
 
-def select_value(line):
-    return_select_value = ''
-    if 'moveTo' in line:
-        return_select_value = 'どこへマウスを移動'
-    elif 'scroll' in line:
-        return_select_value = 'どれくらいスクロール'
-    elif 'sleep' in line:
-        return_select_value = '何秒待つ'
-    return return_select_value
+# コードの文字列を順番に引数に設定することで、どんな内容なのか調べて戻り値として返す。
+def parse_action(code: str):
+    code = code.strip()
+
+    # -------------------------
+    # time.sleep(x)
+    # -------------------------
+    m = re.match(r"time\.sleep\((\d+)\)", code)
+    if m:
+        sec = m.group(1)
+        return {
+            "type": "wait",
+            "dropdown": "何秒待つ",
+            "seconds": sec
+        }
+
+    # -------------------------
+    # pyautogui.scroll(x)
+    # -------------------------
+    m = re.match(r"pyautogui\.scroll\((-?\d+)\)", code)
+    if m:
+        amount = int(m.group(1))
+        direction = "下" if amount < 0 else "上"
+        return {
+            "type": "scroll",
+            "dropdown": "どれくらいスクロール",
+            "direction": direction,
+            "amount": abs(amount)
+        }
+
+    # -------------------------
+    # pyautogui.moveTo(x, y, duration)
+    # -------------------------
+    m = re.match(r"pyautogui\.moveTo\((\d+),\s*(\d+)(?:,\s*duration=(\d+))?\)", code)
+    if m:
+        x = m.group(1)
+        y = m.group(2)
+        duration = m.group(3)  # duration が無い場合は None
+
+        return {
+            "type": "move",
+            "dropdown": "どれくらいマウスを移動",
+            "x": x,
+            "y": y,
+            "duration": duration
+        }
+
+    # -------------------------
+    # pyautogui.click(x, y)
+    # -------------------------
+    m = re.match(r"pyautogui\.click\((\d+),\s*(\d+)\)", code)
+    if m:
+        x, y = m.group(1), m.group(2)
+        return {
+            "type": "click",
+            "dropdown": "どこをクリック",
+            "x": x,
+            "y": y
+        }
+
+    # -------------------------
+    # pyautogui.write("text")
+    # -------------------------
+    m = re.match(r"pyautogui\.write\(['\"](.+?)['\"]\)", code)
+    if m:
+        text = m.group(1)
+        return {
+            "type": "write",
+            "dropdown": "文字入力",
+            "text": text
+        }
+
+    # -------------------------
+    # pyautogui.press("enter")
+    # -------------------------
+    m = re.match(r"pyautogui\.press\(['\"](.+?)['\"]\)", code)
+    if m:
+        key = m.group(1)
+        return {
+            "type": "press",
+            "dropdown": "キー入力",
+            "key": key
+        }
+
+    # -------------------------
+    # pyautogui.hotkey("ctrl", "c")
+    # -------------------------
+    m = re.match(r"pyautogui\.hotkey\((.+)\)", code)
+    if m:
+        keys = [k.strip().strip("'\"") for k in m.group(1).split(",")]
+        return {
+            "type": "hotkey",
+            "dropdown": "ショートカット",
+            "keys": keys
+        }
+
+    # -------------------------
+    # pyautogui.dragTo(x, y, duration)
+    # -------------------------
+    m = re.match(r"pyautogui\.dragTo\((\d+),\s*(\d+),\s*([\d\.]+)\)", code)
+    if m:
+        x, y, duration = m.group(1), m.group(2), m.group(3)
+        return {
+            "type": "drag",
+            "dropdown": "ドラッグ",
+            "x": x,
+            "y": y,
+            "duration": duration
+        }
+
+    # -------------------------
+    # 不明なコード
+    # -------------------------
+    return {
+        "type": "unknown",
+        "dropdown": "不明なコード",
+        "raw": code
+    }
 
 
-def get_dropdown_info(parent, dropdown):
-    # タブ内のウィジェットを取得して Combobox だけフィルタリング
-    comboboxes = [w for w in parent.winfo_children() if isinstance(w, ttk.Combobox)]
-    values = [cb.get() for cb in comboboxes if cb.get() != dropdown]  # 順番通りに値を取得
-    print(f'get_dropdown_info 順番通りの値: ', values)
-    return values
+def save_file(parent, filename_dropdown, folder_path):
+    """
+    タブ内のすべての Label の値を順番通りに取得して保存する完全版
+    """
+    # 保存ファイル名
+    filename = filename_dropdown.get().strip()
+    if not filename:
+        print("save_file: ファイル名が空のため保存できません")
+        return
 
-
-def save_file(dropdown, dropdowns, folder_path):
-    filename = dropdown.get()
     filepath = folder_path / filename
-    save_combobox_values(comboboxes=dropdowns, filepath=filepath)
-    print(f'save_file: {folder_path}フォルダに{filename}を保存しました')
+
+    # タブ内のすべての Label を取得（フレームの中も含む）
+    labels = get_all_labels(parent)
+
+    # cord_label のみ取得
+    labels = [lb for lb in labels if getattr(lb, "role", None) == "cord_label"]
+
+    # 保存処理（空の値は除外）
+    save_label_values(labels=labels, filepath=filepath)
+
+    print(f"save_file: {folder_path} フォルダに {filename} を保存しました")
 
 
 def edit_selected_file(dropdown, parent, values, folder_path):
@@ -127,6 +246,48 @@ def delete_selected_file(dropdown):
 
 # =================================================================
 # GUIウィジェットの表示
+
+# ドロップダウンの値が変更されたときに、すでに-ボタンより右にウィジェットがある場合、前のドロップダウンの値で作成されたウィジェットであるため削除する
+def delete_widgets_right_of_button(frame, exclude_button):
+    # -ボタン（削除ボタン）のX座標（frame内での位置）
+    ax = exclude_button.winfo_x()
+
+    # frame内のすべての子ウィジェットを調べる
+    for widget in frame.winfo_children():
+        # -ボタン（削除）自身は削除しない
+        if widget is exclude_button:
+            continue
+
+        # ウィジェットのX座標
+        wx = widget.winfo_x()
+
+        # ボタンAより右にある場合 → 削除
+        if wx > ax:
+            widget.destroy()
+
+
+def get_all_labels(widget):
+    labels = []
+    for child in widget.winfo_children():
+        # label なら追加
+        if isinstance(child, (tkinter.Label, ttk.Label)):
+            labels.append(child)
+        # 子供の中も探索（再帰）
+        labels.extend(get_all_labels(child))
+    return labels
+
+
+def get_all_dropdowns(widget):
+    dropdowns = []
+    for child in widget.winfo_children():
+        # Combobox なら追加
+        if isinstance(child, ttk.Combobox):
+            dropdowns.append(child)
+        # 子供の中も探索（再帰）
+        dropdowns.extend(get_all_dropdowns(child))
+    return dropdowns
+
+
 def get_all_frames(widget):
     frames = []
     for child in widget.winfo_children():
@@ -151,62 +312,6 @@ def remove_frame(parent, exclude_frame=None):
         for f in frames:
             if f.winfo_exists():
                 f.destroy()
-
-# def get_dropdowns_in_tab(parent):
-#     dropdowns = [child for child in parent.winfo_children() if isinstance(child, (tkinter.OptionMenu, ttk.Combobox))]
-#
-#     return dropdowns
-# def get_all_dropdowns(widget):
-#     dropdowns = []
-#     for child in widget.winfo_children():
-#         # Combobox なら追加
-#         if isinstance(child, ttk.Combobox):
-#             dropdowns.append(child)
-#         # 子供の中も探索（再帰）
-#         dropdowns.extend(get_all_dropdowns(child))
-#     return dropdowns
-#
-#
-# def get_labels_in_tab(parent):
-#     labels = [child for child in parent.winfo_children() if isinstance(child, (tkinter.Label, ttk.Label))]
-#
-#     return labels
-#
-#
-# def remove_dropdown(parent, exclude_dropdown=None):
-#     dropdowns = get_all_dropdowns(parent)
-#
-#     if exclude_dropdown:
-#         # 除外対象以外を削除
-#         for d in dropdowns:
-#             if d.winfo_exists() and d is not exclude_dropdown:
-#                 d.destroy()
-#         # exclude を残すためにリストを再構築
-#         dropdowns[:] = [d for d in dropdowns if d is exclude_dropdown]
-#     else:
-#         # 全部削除
-#         for d in dropdowns:
-#             if d.winfo_exists():
-#                 d.destroy()
-#         dropdowns.clear()
-#
-#
-# def remove_label(parent, exclude_label=None):
-#     labels = get_labels_in_tab(parent)
-#
-#     if exclude_label:
-#         # 除外対象以外を削除
-#         for d in labels:
-#             if d.winfo_exists() and d is not exclude_label:
-#                 d.destroy()
-#         # exclude を残すためにリストを再構築
-#         labels[:] = [d for d in labels if d is exclude_label]
-#     else:
-#         # 全部削除
-#         for d in labels:
-#             if d.winfo_exists():
-#                 d.destroy()
-#         labels.clear()
 
 
 def create_scrollable_tab(notebook, tab_text):
@@ -253,16 +358,8 @@ def create_scrollable_tab(notebook, tab_text):
     return scrollable_frame
 
 
-def create_file_dropdown(parent, folder_path):
-    # フォルダ内のファイル一覧を取得
-    files = os.listdir(folder_path)
-
-    dropdown = ttk.Combobox(parent, values=files, state="readonly")
-    dropdown.pack(anchor='nw')
-
-    return dropdown
-
-
+# 編集ボタンが押されたときの処理
+# テキストファイルを読み込んでウィジェットを作成する。
 def create_dropdowns_from_textfile(parent, values, filepath, filename):
     dropdowns = []
 
@@ -273,6 +370,9 @@ def create_dropdowns_from_textfile(parent, values, filepath, filename):
         text = line.strip()
 
         if text != filename and 'import' not in text:
+            # １行ずつパーサー関数で解析
+            parsed_text = parse_action(code=text)
+
             # 新しい行フレーム
             row_frame = tkinter.Frame(parent)
             row_frame.pack(fill='x', anchor='nw')
@@ -280,11 +380,12 @@ def create_dropdowns_from_textfile(parent, values, filepath, filename):
             # ラベル
             label = tkinter.Label(row_frame, text=text)
             label.pack(anchor='nw')
+            label.role = "cord_label"
 
             # ドロップダウン
             dropdown = ttk.Combobox(row_frame, values=values, state="readonly")
             dropdown.pack(side='left')
-            dropdown.set(select_value(text))
+            dropdown.set(parsed_text['dropdown'])
             dropdowns.append(dropdown)
 
             # +ボタン（行追加）
@@ -302,22 +403,77 @@ def create_dropdowns_from_textfile(parent, values, filepath, filename):
                 command=lambda fr=row_frame: delete_row(fr)
             )
             delete_button.pack(side='left')
+            delete_button.role = "delete_button"
+
+            # ドロップダウンの選択内容に応じたウィジェット
+            apply_parsed_action(result=parsed_text, parent=row_frame, cord_label=label)
 
     return dropdowns
 
 
-def on_select(parent, dropdown):
+# 編集ボタンを押して、テキストを読み込んでドロップダウンが表示された後、
+# ドロップダウンを変更する操作をしたときのイベントとして、ドロップダウン右に表示されるウィジェットを変更する処理
+def on_select(label, dropdown, parent):
+
+    # ドロップダウンの選択された値を取得
     selected = dropdown.get()
     print(f"選択された値: {selected}")
-    # このコードはIF文で大幅に修正予定。ドロップダウンの内容に応じて、表示する内容を変える。
-    # 例えばマウス移動なら、ｘ座標とｙ座標の数字が入力できるエントリーを作る。
 
-    # 右に新しいドロップダウンを追加
-    new_values = [f"{selected}_A", f"{selected}_B", f"{selected}_C"]
-    dropdown = ttk.Combobox(parent, values=new_values, state="readonly")
-    dropdown.pack(side='left')
+    # ドロップダウンの内容に応じたデフォルトのPythonコードを取得
+    default_code = get_default_code_from_dropdown(dropdown_value=selected)
+
+    # デフォルトのPythonコードをラベルに表示
+    label.config(text=default_code)
+
+    # -ボタン（削除ボタン）を取得
+    exclude_button = None
+    for child in parent.winfo_children():
+        if isinstance(child, (tkinter.Button, ttk.Button)):
+            if getattr(child, "role", None) == "delete_button":
+                exclude_button = child
+                break
+
+    # -ボタン（削除ボタン）より右にウィジェットがあれば削除する
+    delete_widgets_right_of_button(frame=parent, exclude_button=exclude_button)
+
+    # ドロップダウンの内容に応じたウィジェットの作成
+    parsed_text = parse_action(default_code)
+    apply_parsed_action(result=parsed_text, parent=parent, cord_label=label)
 
 
+# ドロップダウンの値を使用して、デフォルト値が入った、デフォルトのPythonコードを文字列で返す処理
+def get_default_code_from_dropdown(dropdown_value):
+    if dropdown_value == "何秒待つ":
+        defaults_cord = 'time.sleep(1)'
+
+    elif dropdown_value == "どれくらいスクロール":
+        defaults_cord = 'pyautogui.scroll(100)'
+
+    elif dropdown_value == "どれくらいマウスを移動":
+        defaults_cord = 'pyautogui.moveTo(100, 100, duration=1)'
+
+    elif dropdown_value == "どこをクリック":
+        defaults_cord = 'pyautogui.click(100, 100)'
+
+    elif dropdown_value == "文字入力":
+        defaults_cord = 'pyautogui.write("テキスト")'
+
+    elif dropdown_value == "キー入力":
+        defaults_cord = 'pyautogui.press("enter")'
+
+    elif dropdown_value == "ショートカット":
+        defaults_cord = 'pyautogui.hotkey("ctrl", "c")'
+
+    elif dropdown_value == "ドラッグ":
+        defaults_cord = 'pyautogui.dragTo(200, 200, duration=1)'
+
+    else:
+        defaults_cord = '# 不明なコード'
+
+    return defaults_cord
+
+
+# ウィジェットの+ボタンが押されたときの処理
 def add_widget_below(current_frame, values):
     # current_frame の親（縦に積んでいる container）
     parent = current_frame.master
@@ -325,13 +481,18 @@ def add_widget_below(current_frame, values):
     # 新しい行フレームを作る
     new_frame = tkinter.Frame(parent)
 
-    # ★ current_frame の直後に挿入
-    new_frame.pack(after=current_frame)
+    # current_frame の直後に挿入
+    new_frame.pack(anchor='nw', after=current_frame)
 
-    # 新しいドロップダウンを作る
+    # ラベル
+    label = tkinter.Label(new_frame)
+    label.pack(anchor='nw')
+    label.role = "cord_label"
+
+    # ドロップダウン
     combo = ttk.Combobox(new_frame, values=values, state="readonly")
     combo.pack(side='left')
-    combo.bind("<<ComboboxSelected>>", lambda e: on_select(parent=new_frame, dropdown=combo))
+    combo.bind("<<ComboboxSelected>>", lambda e: on_select(label=label, dropdown=combo, parent=new_frame))
 
     # +ボタン（行追加）
     add_button = tkinter.Button(
@@ -348,11 +509,138 @@ def add_widget_below(current_frame, values):
         command=lambda f=new_frame: delete_row(f)
     )
     delete_button.pack(side='left')
+    delete_button.role = "delete_button"
 
 
 def delete_row(row_frame):
     if row_frame.winfo_exists():
         row_frame.destroy()
+
+
+# ドロップダウンの右のウィジェットのエントリーの値が変更されたときにラベルの表示を変える処理
+def on_entry_change(_, dropdown_value, label_widget, entries):
+    # 全 Entry の値を取得
+    values = [entry.get().strip() for entry in entries]
+
+    # 空欄がある場合はラベルをデフォルト値に戻す
+    if any(v == "" for v in values):
+        default_code = get_default_code_from_dropdown(dropdown_value)
+        label_widget.config(text=default_code)
+        return
+
+    # ラベルの解析
+    parsed_text = parse_action(label_widget.cget("text"))
+
+    # --- 複数 Entry を使うアクション ---
+    if parsed_text["dropdown"] == "どれくらいマウスを移動":
+        x, y, duration = values
+        label_widget.config(text=f'pyautogui.moveTo({x}, {y}, duration={duration})')
+
+    elif parsed_text["dropdown"] == "どこをクリック":
+        x, y = values
+        label_widget.config(text=f'pyautogui.click({x}, {y})')
+
+    elif parsed_text["dropdown"] == "ドラッグ":
+        x, y = values
+        label_widget.config(text=f'pyautogui.dragTo({x}, {y}, duration=1)')
+
+    # --- 1つの Entry のアクション ---
+    elif parsed_text["dropdown"] == "何秒待つ":
+        label_widget.config(text=f'time.sleep({values[0]})')
+
+    elif parsed_text["dropdown"] == "どれくらいスクロール":
+        label_widget.config(text=f'pyautogui.scroll({values[0]})')
+
+    elif parsed_text["dropdown"] == "文字入力":
+        label_widget.config(text=f'pyautogui.write("{values[0]}")')
+
+    elif parsed_text["dropdown"] == "キー入力":
+        label_widget.config(text=f'pyautogui.press("{values[0]}")')
+
+    elif parsed_text["dropdown"] == "ショートカット":
+        label_widget.config(text=f'pyautogui.hotkey("{values[0]}")')
+
+    else:
+        label_widget.config(text="# 不明なコード")
+
+
+# def parse_action(code: str)関数で調べたあと、def parse_action(code: str)関数の戻り値を引数に使用してウィジェットを作成する処理
+def apply_parsed_action(result, parent, cord_label):
+    """
+    parse_action の戻り値 result をウィジェットに反映する
+    """
+
+    print(result)
+    # --- "何秒待つ" ---
+    if result["dropdown"] == "何秒待つ":
+        entry = tkinter.Entry(parent, width=5)
+        entry.pack(side='left')
+        entry.delete(0, "end")
+        entry.insert(0, str(result["seconds"]))
+        entry.bind("<KeyRelease>", lambda e: on_entry_change(e, result["dropdown"], cord_label, [entry]))
+
+        label = tkinter.Label(parent, text='秒待つ')
+        label.pack(side='left')
+
+    # --- "どれくらいスクロール" ---
+    if result["dropdown"] == "どれくらいスクロール":
+        entry = tkinter.Entry(parent, width=7)
+        entry.pack(side='left')
+        entry.delete(0, "end")
+        entry.insert(0, str(result["amount"]))
+        entry.bind("<KeyRelease>", lambda e: on_entry_change(e, result["dropdown"], cord_label, [entry]))
+
+        label = tkinter.Label(parent, text='スクロール(例：－200＝下に200スクロール、300＝上に300スクロール)')
+        label.pack(side='left')
+
+    # --- "どれくらいマウスを移動" ---
+    if result["dropdown"] == "どれくらいマウスを移動":
+        label_x = tkinter.Label(parent, text='x:')
+        label_x.pack(side='left')
+
+        entry_x = tkinter.Entry(parent, width=4)
+        entry_x.pack(side='left')
+        entry_x.delete(0, "end")
+        entry_x.insert(0, str(result["x"]))
+        entry_x.bind("<KeyRelease>", lambda e: on_entry_change(e,
+                                                               result["dropdown"],
+                                                               cord_label,
+                                                               [entry_x, entry_y, entry_duration]))
+
+        label = tkinter.Label(parent, text='  ')
+        label.pack(side='left')
+
+        label_y = tkinter.Label(parent, text='y:')
+        label_y.pack(side='left')
+
+        entry_y = tkinter.Entry(parent, width=4)
+        entry_y.pack(side='left')
+        entry_y.delete(0, "end")
+        entry_y.insert(0, str(result["y"]))
+        entry_y.bind("<KeyRelease>", lambda e: on_entry_change(e,
+                                                               result["dropdown"],
+                                                               cord_label,
+                                                               [entry_x, entry_y, entry_duration]))
+
+        label = tkinter.Label(parent, text=' の位置に ')
+        label.pack(side='left')
+
+        entry_duration = tkinter.Entry(parent, width=4)
+        entry_duration.pack(side='left')
+        entry_duration.delete(0, "end")
+        entry_duration.insert(0, str(result["duration"]))
+        entry_duration.bind("<KeyRelease>", lambda e: on_entry_change(e,
+                                                                      result["dropdown"],
+                                                                      cord_label,
+                                                                      [entry_x, entry_y, entry_duration]))
+
+        label_duration = tkinter.Label(parent, text='秒かけて移動')
+        label_duration.pack(side='left')
+
+        label = tkinter.Label(parent,
+                              text=('にマウス移動(例：x:200、y:600 、duration:3'
+                                    '　＝ 画面左上から右に200ピクセル,下に600ピクセルの位置に3秒かけてマウス移動)'))
+        label.pack(side='left')
 
 
 def create_gui_window(title_name,
@@ -422,27 +710,24 @@ def create_gui_window(title_name,
                                                        text=label_text_for_edit_file)
     label_for_edit_file_tab_decoration.pack()
 
-    dropdown_for_edit_file = create_file_dropdown(parent=frame_for_edit_file_tab_decoration, folder_path=folder_path)
-    dropdown_for_edit_file.set('test2.py')
+    # フォルダ内のファイル一覧を取得
+    files = os.listdir(folder_path)
+    dropdown_for_edit_file = ttk.Combobox(frame_for_edit_file_tab_decoration,
+                                          values=files,
+                                          state="readonly")
+    dropdown_for_edit_file.pack(anchor='nw')
+    dropdown_for_edit_file.bind("<<ComboboxSelected>>",
+                                lambda event: edit_selected_file(dropdown=dropdown_for_edit_file,
+                                                                 parent=tab_for_edit_file,
+                                                                 values=choices,
+                                                                 folder_path=folder_path))
 
-    # 編集ボタンの処理
-    button_for_edit_file_tab_decoration = tkinter.Button(frame_for_edit_file_tab_decoration,
-                                                         text=tab_text_for_edit_file,
-                                                         command=lambda: edit_selected_file(
-                                                            dropdown=dropdown_for_edit_file,
-                                                            parent=tab_for_edit_file,
-                                                            values=choices,
-                                                            folder_path=folder_path))
-    button_for_edit_file_tab_decoration.pack()
+    # dropdown_for_edit_file.set('test2.py')
 
     # 保存ボタンの処理
-    result_holder = {}
-
     def on_button_click():
-        dropdown = dropdown_for_edit_file.get()
-        result_holder["dropdowns"] = get_dropdown_info(parent=frame_for_edit_file_tab_decoration, dropdown=dropdown)
-        save_file(dropdown=dropdown_for_edit_file,
-                  dropdowns=result_holder["dropdowns"],
+        save_file(parent=tab_for_edit_file,
+                  filename_dropdown=dropdown_for_edit_file,
                   folder_path=folder_path)
 
     save_button_for_edit_file_tab_decoration = tkinter.Button(frame_for_edit_file_tab_decoration,
@@ -457,7 +742,10 @@ def create_gui_window(title_name,
     label_for_run_file = tkinter.Label(tab_for_run_file, text=label_text_for_run_file)
     label_for_run_file.pack()
 
-    dropdown_for_run_file = create_file_dropdown(parent=tab_for_run_file, folder_path=folder_path)
+    # フォルダ内のファイル一覧を取得
+    files = os.listdir(folder_path)
+    dropdown_for_run_file = ttk.Combobox(tab_for_run_file, values=files, state="readonly")
+    dropdown_for_run_file.pack(anchor='nw')
 
     button_for_run_file = tkinter.Button(tab_for_run_file,
                                          text=tab_text_for_run_file,
@@ -472,7 +760,10 @@ def create_gui_window(title_name,
     label_for_delete_file = tkinter.Label(tab_for_delete_file, text=label_text_for_delete_file)
     label_for_delete_file.pack()
 
-    dropdown_for_delete_file = create_file_dropdown(parent=tab_for_delete_file, folder_path=folder_path)
+    # フォルダ内のファイル一覧を取得
+    files = os.listdir(folder_path)
+    dropdown_for_delete_file = ttk.Combobox(tab_for_delete_file, values=files, state="readonly")
+    dropdown_for_delete_file.pack(anchor='nw')
 
     button_for_delete_file = tkinter.Button(tab_for_delete_file,
                                             text=tab_text_for_delete_file,
@@ -490,12 +781,6 @@ def create_gui_window(title_name,
     root.mainloop()
 
 # =================================================================
-# code = """import pyautogui
-# pyautogui.moveTo(1500, 1000)
-# """
-#
-# # ファイル名を指定
-# filename = "PY_GUI.py"
 
 
 create_gui_window(title_name='pyautogui_DIY',
@@ -510,4 +795,4 @@ create_gui_window(title_name='pyautogui_DIY',
                   tab_text_for_setting='設定',
                   label_text_for_setting='設定を行ってください',
                   folder_path=Path('.') / 'python_scripts',
-                  choices=['どこへマウスを移動', 'どれくらいスクロール', '何秒待つ'])
+                  choices=['何秒待つ', 'どれくらいスクロール', 'どれくらいマウスを移動', "どこをクリック", "文字入力", "キー入力", "ショートカット", "ドラッグ"])
