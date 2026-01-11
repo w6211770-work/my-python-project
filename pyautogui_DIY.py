@@ -33,8 +33,14 @@ def write_file(folder_path, filename, code):
 
 
 def create_file(folder_path, entry):
+    # codeはインデントまで保存されるため左揃えにしている
     filename = entry.get()
-    code = ''
+    code = """import pyautogui
+import time
+time.sleep(1)
+time.sleep(1)
+time.sleep(1)
+"""
     write_file(folder_path=folder_path, filename=filename, code=code)
 
 # =================================================================
@@ -227,8 +233,9 @@ def run_selected_file(dropdown):
 
 # =================================================================
 # Pythonファイルの削除
-def delete_file(filename):
-    delete_filename = Path(filename)
+def delete_file(filename, folder_path):
+    delete_filename = Path(folder_path) / filename
+    print(f'delete_filename: {delete_filename.resolve()}')
 
     if delete_filename.exists():
         delete_filename.unlink()
@@ -237,9 +244,10 @@ def delete_file(filename):
         print(f"{delete_filename} は存在しません")
 
 
-def delete_selected_file(dropdown):
+def delete_selected_file(dropdown, folder_path):
     filename = dropdown.get()
-    delete_file(filename=filename)
+    delete_file(filename=filename, folder_path=folder_path)
+    dropdown["values"] = os.listdir(folder_path)
 
 # =================================================================
 
@@ -522,8 +530,37 @@ def on_entry_change(_, dropdown_value, label_widget, entries):
     # 全 Entry の値を取得
     values = [entry.get().strip() for entry in entries]
 
+    # --- 色の更新（空欄 → 赤 / 入力あり → 白） ---
+    for entry, value in zip(entries, values):
+        if value == "":
+            entry.configure(background="misty rose")  # 空欄 → 薄い赤
+        else:
+            entry.configure(background="white")  # 入力あり → 元の色
+
     # 空欄がある場合はラベルをデフォルト値に戻す
     if any(v == "" for v in values):
+        default_code = get_default_code_from_dropdown(dropdown_value)
+        label_widget.config(text=default_code)
+        return
+
+    # 入力された値が数値であることを確認する
+    def is_int(s):
+        try:
+            int(s)
+            return True
+        except ValueError:
+            return False
+
+    # --- 数値チェックと色変更 ---
+    all_valid = True
+    for entry, value in zip(entries, values):
+        if not is_int(value):
+            entry.configure(background="misty rose")  # 数値でない → 赤
+            all_valid = False
+        else:
+            entry.configure(background="white")  # 数値 → 白に戻す
+
+    if not all_valid:
         default_code = get_default_code_from_dropdown(dropdown_value)
         label_widget.config(text=default_code)
         return
@@ -682,23 +719,23 @@ def create_gui_window(title_name,
     notebook.add(tab_for_create_new, text=tab_text_for_create_new)
 
     label_for_create_new = tkinter.Label(tab_for_create_new, text=label_text_for_create_new)
-    label_for_create_new.pack()
+    label_for_create_new.pack(anchor='nw')
 
     frame_for_create_new_tab_decoration = tkinter.Frame(tab_for_create_new)
-    frame_for_create_new_tab_decoration.pack()
+    frame_for_create_new_tab_decoration.pack(anchor='nw')
 
     entry_for_create_new_tab_decoration = tkinter.Entry(frame_for_create_new_tab_decoration)
-    entry_for_create_new_tab_decoration.pack()
+    entry_for_create_new_tab_decoration.pack(side='left')
 
     label_for_create_new_tab_decoration = tkinter.Label(frame_for_create_new_tab_decoration, text='.py')
-    label_for_create_new_tab_decoration.pack()
+    label_for_create_new_tab_decoration.pack(side='left')
 
-    button_for_create_new_tab_decoration = tkinter.Button(frame_for_create_new_tab_decoration,
+    button_for_create_new_tab_decoration = tkinter.Button(tab_for_create_new,
                                                           text=tab_text_for_create_new,
                                                           command=lambda: create_file(
                                                             folder_path=folder_path,
                                                             entry=entry_for_create_new_tab_decoration))
-    button_for_create_new_tab_decoration.pack()
+    button_for_create_new_tab_decoration.pack(anchor='w')
 
     # 編集タブ
     tab_for_edit_file = create_scrollable_tab(notebook=notebook, tab_text=tab_text_for_edit_file)
@@ -740,7 +777,7 @@ def create_gui_window(title_name,
     notebook.add(tab_for_run_file, text=tab_text_for_run_file)
 
     label_for_run_file = tkinter.Label(tab_for_run_file, text=label_text_for_run_file)
-    label_for_run_file.pack()
+    label_for_run_file.pack(anchor='nw')
 
     # フォルダ内のファイル一覧を取得
     files = os.listdir(folder_path)
@@ -751,14 +788,14 @@ def create_gui_window(title_name,
                                          text=tab_text_for_run_file,
                                          command=lambda: run_selected_file(
                                             dropdown=dropdown_for_run_file))
-    button_for_run_file.pack()
+    button_for_run_file.pack(anchor='nw')
 
     # 削除タブ
     tab_for_delete_file = ttk.Frame(notebook)
     notebook.add(tab_for_delete_file, text=tab_text_for_delete_file)
 
     label_for_delete_file = tkinter.Label(tab_for_delete_file, text=label_text_for_delete_file)
-    label_for_delete_file.pack()
+    label_for_delete_file.pack(anchor='nw')
 
     # フォルダ内のファイル一覧を取得
     files = os.listdir(folder_path)
@@ -768,15 +805,35 @@ def create_gui_window(title_name,
     button_for_delete_file = tkinter.Button(tab_for_delete_file,
                                             text=tab_text_for_delete_file,
                                             command=lambda: delete_selected_file(
-                                                dropdown=dropdown_for_delete_file))
-    button_for_delete_file.pack()
+                                                dropdown=dropdown_for_delete_file,
+                                                folder_path=folder_path))
+    button_for_delete_file.pack(anchor='nw')
 
     # 設定タブ
     tab_for_setting = ttk.Frame(notebook)
     notebook.add(tab_for_setting, text=tab_text_for_setting)
 
     label_for_setting = tkinter.Label(tab_for_setting, text=label_text_for_setting)
-    label_for_setting.pack()
+    label_for_setting.pack(anchor='nw')
+
+    # ドロップダウンが存在するタブ全体のイベントの設定
+    def get_files():
+        # フォルダの中のファイル名を取得
+        # タブ切り替え時など、ドロップダウンの表示内容更新時に使用する
+        return [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
+
+    def on_tab_changed(event):
+        # タブ切り替え時のイベント
+        tab_text = event.widget.tab(event.widget.index("current"), "text")
+        print("開いたタブ:", tab_text)
+        if tab_text == tab_text_for_edit_file:
+            dropdown_for_edit_file["values"] = get_files()
+        elif tab_text == tab_text_for_run_file:
+            dropdown_for_run_file["values"] = get_files()
+        elif tab_text == tab_text_for_delete_file:
+            dropdown_for_delete_file["values"] = get_files()
+
+    notebook.bind("<<NotebookTabChanged>>", on_tab_changed)
 
     root.mainloop()
 
