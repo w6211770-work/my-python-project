@@ -157,7 +157,10 @@ def parse_action(code: str):
     # -------------------------
     # pyautogui.dragTo(x, y, duration)
     # -------------------------
-    m = re.match(r"pyautogui\.dragTo\((\d+),\s*(\d+),\s*([\d\.]+)\)", code)
+    m = re.match(
+        r"pyautogui\.dragTo\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(?:duration\s*=\s*)?([\d\.]+)\s*\)",
+        code
+    )
     if m:
         x, y, duration = m.group(1), m.group(2), m.group(3)
         return {
@@ -166,6 +169,18 @@ def parse_action(code: str):
             "x": x,
             "y": y,
             "duration": duration
+        }
+
+    # -------------------------
+    # コメント
+    # -------------------------
+    m = re.match(r"#\s*(.*)", code)
+    if m:
+        txt = m.group(1).strip()
+        return {
+            "type": "comment",
+            "dropdown": "コメント",
+            "text": txt
         }
 
     # -------------------------
@@ -394,6 +409,9 @@ def create_dropdowns_from_textfile(parent, values, filepath, filename):
             dropdown = ttk.Combobox(row_frame, values=values, state="readonly")
             dropdown.pack(side='left')
             dropdown.set(parsed_text['dropdown'])
+            dropdown.bind("<<ComboboxSelected>>",
+                          lambda e, lbl=label, dd=dropdown, parent=row_frame: on_select(lbl, dd, parent))
+
             dropdowns.append(dropdown)
 
             # +ボタン（行追加）
@@ -475,6 +493,8 @@ def get_default_code_from_dropdown(dropdown_value):
     elif dropdown_value == "ドラッグ":
         defaults_cord = 'pyautogui.dragTo(200, 200, duration=1)'
 
+    elif dropdown_value == "コメント":
+        defaults_cord = '# コメント'
     else:
         defaults_cord = '# 不明なコード'
 
@@ -578,8 +598,8 @@ def on_entry_change(_, dropdown_value, label_widget, entries):
         label_widget.config(text=f'pyautogui.click({x}, {y})')
 
     elif parsed_text["dropdown"] == "ドラッグ":
-        x, y = values
-        label_widget.config(text=f'pyautogui.dragTo({x}, {y}, duration=1)')
+        x, y, duration = values
+        label_widget.config(text=f'pyautogui.dragTo({x}, {y}, duration={duration})')
 
     # --- 1つの Entry のアクション ---
     elif parsed_text["dropdown"] == "何秒待つ":
@@ -588,10 +608,67 @@ def on_entry_change(_, dropdown_value, label_widget, entries):
     elif parsed_text["dropdown"] == "どれくらいスクロール":
         label_widget.config(text=f'pyautogui.scroll({values[0]})')
 
-    elif parsed_text["dropdown"] == "文字入力":
+    else:
+        label_widget.config(text="# 不明なコード")
+
+
+# ドロップダウンの右のウィジェットのエントリーの値が変更されたときにラベルの表示を変える処理
+def on_entry_change_for_text(_, dropdown_value, label_widget, entries):
+    # 全 Entry の値を取得
+    values = [entry.get().strip() for entry in entries]
+
+    # --- 色の更新（空欄 → 赤 / 入力あり → 白） ---
+    for entry, value in zip(entries, values):
+        if value == "":
+            entry.configure(background="misty rose")  # 空欄 → 薄い赤
+        else:
+            entry.configure(background="white")  # 入力あり → 元の色
+
+    # 空欄がある場合はラベルをデフォルト値に戻す
+    if any(v == "" for v in values):
+        default_code = get_default_code_from_dropdown(dropdown_value)
+        label_widget.config(text=default_code)
+        return
+
+    # ラベルの解析
+    parsed_text = parse_action(label_widget.cget("text"))
+
+    # --- 1つの Entry のアクション ---
+
+    if parsed_text["dropdown"] == "文字入力":
         label_widget.config(text=f'pyautogui.write("{values[0]}")')
 
-    elif parsed_text["dropdown"] == "キー入力":
+    elif parsed_text["dropdown"] == "コメント":
+        label_widget.config(text=f'# {values[0]}')
+
+    else:
+        label_widget.config(text="# 不明なコード")
+
+
+# ドロップダウンの右のウィジェットのエントリーの値が変更されたときにラベルの表示を変える処理
+def on_entry_change_for_dropdown(_, dropdown_value, label_widget, dropdowns):
+    # 全 Dropdown の値を取得
+    values = [dropdown.get().strip() for dropdown in dropdowns]
+
+    # --- 色の更新（空欄 → 赤 / 入力あり → 白） ---
+    for dropdown, value in zip(dropdowns, values):
+        if value == "":
+            dropdown.configure(background="misty rose")  # 空欄 → 薄い赤
+        else:
+            dropdown.configure(background="white")  # 入力あり → 元の色
+
+    # 空欄がある場合はラベルをデフォルト値に戻す
+    if any(v == "" for v in values):
+        default_code = get_default_code_from_dropdown(dropdown_value)
+        label_widget.config(text=default_code)
+        return
+
+    # ラベルの解析
+    parsed_text = parse_action(label_widget.cget("text"))
+
+    # --- 1つの Dropdown のアクション ---
+
+    if parsed_text["dropdown"] == "キー入力":
         label_widget.config(text=f'pyautogui.press("{values[0]}")')
 
     elif parsed_text["dropdown"] == "ショートカット":
@@ -617,6 +694,38 @@ def apply_parsed_action(result, parent, cord_label):
         entry.bind("<KeyRelease>", lambda e: on_entry_change(e, result["dropdown"], cord_label, [entry]))
 
         label = tkinter.Label(parent, text='秒待つ')
+        label.pack(side='left')
+
+    # --- "コメント" ---
+    if result["dropdown"] == "コメント":
+        entry = tkinter.Entry(parent, width=35)
+        entry.pack(side='left')
+        entry.delete(0, "end")
+        entry.insert(0, str(result["text"]))
+        entry.bind("<KeyRelease>", lambda e: on_entry_change_for_text(e, result["dropdown"], cord_label, [entry]))
+
+        label = tkinter.Label(parent, text='処理のコメントを残す')
+        label.pack(side='left')
+
+    # --- "文字入力" ---
+    if result["dropdown"] == "文字入力":
+        entry = tkinter.Entry(parent, width=35)
+        entry.pack(side='left')
+        entry.delete(0, "end")
+        entry.insert(0, str(result["text"]))
+        entry.bind("<KeyRelease>", lambda e: on_entry_change_for_text(e, result["dropdown"], cord_label, [entry]))
+
+        label = tkinter.Label(parent, text='文字入力欄に文字を入力する')
+        label.pack(side='left')
+
+    # --- "キー入力" ---
+    if result["dropdown"] == "キー入力":
+        dropdown = ttk.Combobox(parent, width=12, values=['enter', 'tab', 'space', 'backspace', 'up', 'down', 'left', 'right'])
+        dropdown.pack(side='left')
+        dropdown.set(str(result["key"]))
+        dropdown.bind("<<ComboboxSelected>>", lambda e: on_entry_change_for_dropdown(e, result["dropdown"], cord_label, [dropdown]))
+
+        label = tkinter.Label(parent, text='のキーを押す')
         label.pack(side='left')
 
     # --- "どれくらいスクロール" ---
@@ -671,12 +780,97 @@ def apply_parsed_action(result, parent, cord_label):
                                                                       cord_label,
                                                                       [entry_x, entry_y, entry_duration]))
 
-        label_duration = tkinter.Label(parent, text='秒かけて移動')
+        label_duration = tkinter.Label(parent, text='秒かけてマウス移動')
         label_duration.pack(side='left')
 
         label = tkinter.Label(parent,
-                              text=('にマウス移動(例：x:200、y:600 、duration:3'
+                              text=('(例：x:200、y:600 、duration:3'
                                     '　＝ 画面左上から右に200ピクセル,下に600ピクセルの位置に3秒かけてマウス移動)'))
+        label.pack(side='left')
+
+    # --- "どこをクリック" ---
+    if result["dropdown"] == "どこをクリック":
+        label_x = tkinter.Label(parent, text='x:')
+        label_x.pack(side='left')
+
+        entry_x = tkinter.Entry(parent, width=4)
+        entry_x.pack(side='left')
+        entry_x.delete(0, "end")
+        entry_x.insert(0, str(result["x"]))
+        entry_x.bind("<KeyRelease>", lambda e: on_entry_change(e,
+                                                               result["dropdown"],
+                                                               cord_label,
+                                                               [entry_x, entry_y]))
+
+        label = tkinter.Label(parent, text='  ')
+        label.pack(side='left')
+
+        label_y = tkinter.Label(parent, text='y:')
+        label_y.pack(side='left')
+
+        entry_y = tkinter.Entry(parent, width=4)
+        entry_y.pack(side='left')
+        entry_y.delete(0, "end")
+        entry_y.insert(0, str(result["y"]))
+        entry_y.bind("<KeyRelease>", lambda e: on_entry_change(e,
+                                                               result["dropdown"],
+                                                               cord_label,
+                                                               [entry_x, entry_y]))
+
+        label = tkinter.Label(parent, text=' の位置を左クリック ')
+        label.pack(side='left')
+
+        label = tkinter.Label(parent,
+                              text='(例：x:200、y:600　＝ 画面左上から右に200ピクセル,下に600ピクセルの位置をクリック)')
+        label.pack(side='left')
+
+    # --- "ドラッグ" ---
+    if result["dropdown"] == "ドラッグ":
+        label_x = tkinter.Label(parent, text='x:')
+        label_x.pack(side='left')
+
+        entry_x = tkinter.Entry(parent, width=4)
+        entry_x.pack(side='left')
+        entry_x.delete(0, "end")
+        entry_x.insert(0, str(result["x"]))
+        entry_x.bind("<KeyRelease>", lambda e: on_entry_change(e,
+                                                               result["dropdown"],
+                                                               cord_label,
+                                                               [entry_x, entry_y, entry_duration]))
+
+        label = tkinter.Label(parent, text='  ')
+        label.pack(side='left')
+
+        label_y = tkinter.Label(parent, text='y:')
+        label_y.pack(side='left')
+
+        entry_y = tkinter.Entry(parent, width=4)
+        entry_y.pack(side='left')
+        entry_y.delete(0, "end")
+        entry_y.insert(0, str(result["y"]))
+        entry_y.bind("<KeyRelease>", lambda e: on_entry_change(e,
+                                                               result["dropdown"],
+                                                               cord_label,
+                                                               [entry_x, entry_y, entry_duration]))
+
+        label = tkinter.Label(parent, text=' の位置へ ')
+        label.pack(side='left')
+
+        entry_duration = tkinter.Entry(parent, width=4)
+        entry_duration.pack(side='left')
+        entry_duration.delete(0, "end")
+        entry_duration.insert(0, str(result["duration"]))
+        entry_duration.bind("<KeyRelease>", lambda e: on_entry_change(e,
+                                                                      result["dropdown"],
+                                                                      cord_label,
+                                                                      [entry_x, entry_y, entry_duration]))
+
+        label_duration = tkinter.Label(parent, text='秒かけてドラッグ')
+        label_duration.pack(side='left')
+
+        label = tkinter.Label(parent,
+                              text=('(例：x:200、y:600、duration=1　'
+                                    '＝ 画面左上から右に200ピクセル,下に600ピクセルの位置へ1秒かけてドラッグ)'))
         label.pack(side='left')
 
 
@@ -852,4 +1046,4 @@ create_gui_window(title_name='pyautogui_DIY',
                   tab_text_for_setting='設定',
                   label_text_for_setting='設定を行ってください',
                   folder_path=Path('.') / 'python_scripts',
-                  choices=['何秒待つ', 'どれくらいスクロール', 'どれくらいマウスを移動', "どこをクリック", "文字入力", "キー入力", "ショートカット", "ドラッグ"])
+                  choices=['何秒待つ', 'どれくらいスクロール', 'どれくらいマウスを移動', "どこをクリック", "文字入力", "キー入力", "ショートカット", "ドラッグ", "コメント"])
