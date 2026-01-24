@@ -211,13 +211,21 @@ def save_file(parent, filename_dropdown, folder_path):
     # cord_label のみ取得
     labels = [lb for lb in labels if getattr(lb, "role", None) == "cord_label"]
 
+    # 保存するデータの先頭にimport文を追加
+    label1 = tkinter.Label(text="import pyautogui")
+    label1.role = "cord_label"
+    labels.insert(0, label1)
+    label2 = tkinter.Label(text="import time")
+    label2.role = "cord_label"
+    labels.insert(0, label2)
+
     # 保存処理（空の値は除外）
     save_label_values(labels=labels, filepath=filepath)
 
     print(f"save_file: {folder_path} フォルダに {filename} を保存しました")
 
 
-def edit_selected_file(dropdown, parent, values, folder_path):
+def edit_selected_file(dropdown, parent, values, folder_path, label_center):
     # parent=tab_for_edit_file
     filename = dropdown.get()
     filepath = folder_path / filename
@@ -228,20 +236,21 @@ def edit_selected_file(dropdown, parent, values, folder_path):
     remove_frame(parent=parent, exclude_frame=exclude_frame)
 
     # 編集するファイルを読み込みドロップダウンを作成
-    create_dropdowns_from_textfile(parent=parent, values=values, filepath=filepath, filename=filename)
+    create_dropdowns_from_textfile(parent=parent, values=values, filepath=filepath, filename=filename, label_center=label_center)
 # =================================================================
 
 
 # =================================================================
 # Pythonファイルの実行
 
-def run_file(filename):
-    subprocess.run(["python", filename])
+def run_file(folder_path_filename):
+    subprocess.run(["python", folder_path_filename])
 
 
-def run_selected_file(dropdown):
+def run_selected_file(folder_path, dropdown):
     filename = dropdown.get()
-    run_file(filename=filename)
+    folder_path_filename = folder_path / filename
+    run_file(folder_path_filename=folder_path_filename)
 
 # =================================================================
 
@@ -322,6 +331,15 @@ def get_all_frames(widget):
     return frames
 
 
+def get_all_entries(widget):
+    result = []
+    for child in widget.winfo_children():
+        if isinstance(child, tkinter.Entry):
+            result.append(child)
+        result.extend(get_all_entries(child))
+    return result
+
+
 def remove_frame(parent, exclude_frame=None):
     frames = get_all_frames(parent)
 
@@ -341,6 +359,8 @@ def create_scrollable_tab(notebook, tab_text):
     # コンテナ作成
     container = ttk.Frame(notebook)
     notebook.add(container, text=tab_text)
+
+    # 編集タブを表示する
     notebook.select(container)
 
     # キャンバス作成
@@ -383,7 +403,7 @@ def create_scrollable_tab(notebook, tab_text):
 
 # 編集ボタンが押されたときの処理
 # テキストファイルを読み込んでウィジェットを作成する。
-def create_dropdowns_from_textfile(parent, values, filepath, filename):
+def create_dropdowns_from_textfile(parent, values, filepath, filename, label_center):
     dropdowns = []
 
     with open(filepath, "r", encoding="utf-8") as f:
@@ -399,6 +419,7 @@ def create_dropdowns_from_textfile(parent, values, filepath, filename):
             # 新しい行フレーム
             row_frame = tkinter.Frame(parent)
             row_frame.pack(fill='x', anchor='nw')
+            row_frame.entries = {}
 
             # ラベル
             label = tkinter.Label(row_frame, text=text)
@@ -410,7 +431,7 @@ def create_dropdowns_from_textfile(parent, values, filepath, filename):
             dropdown.pack(side='left')
             dropdown.set(parsed_text['dropdown'])
             dropdown.bind("<<ComboboxSelected>>",
-                          lambda e, lbl=label, dd=dropdown, parent=row_frame: on_select(lbl, dd, parent))
+                          lambda e, lbl=label, dd=dropdown, parent=row_frame: on_select(lbl, dd, parent, label_center))
 
             dropdowns.append(dropdown)
 
@@ -418,7 +439,7 @@ def create_dropdowns_from_textfile(parent, values, filepath, filename):
             add_button = tkinter.Button(
                 row_frame,
                 text="+",
-                command=lambda fr=row_frame: add_widget_below(fr, values)
+                command=lambda fr=row_frame: add_widget_below(fr, values, label_center)
             )
             add_button.pack(side='left')
 
@@ -437,9 +458,17 @@ def create_dropdowns_from_textfile(parent, values, filepath, filename):
     return dropdowns
 
 
+def update_center_label(tab, label):
+    # 中央ラベルの表示更新
+    if tab.last_selected_combobox is not None:
+        label.config(text=str(tab.last_selected_combobox.get()))
+    else:
+        label.config(text="未選択")
+
+
 # 編集ボタンを押して、テキストを読み込んでドロップダウンが表示された後、
 # ドロップダウンを変更する操作をしたときのイベントとして、ドロップダウン右に表示されるウィジェットを変更する処理
-def on_select(label, dropdown, parent):
+def on_select(label, dropdown, parent, label_center):
 
     # ドロップダウンの選択された値を取得
     selected = dropdown.get()
@@ -466,6 +495,15 @@ def on_select(label, dropdown, parent):
     parsed_text = parse_action(default_code)
     apply_parsed_action(result=parsed_text, parent=parent, cord_label=label)
 
+    # 編集時使用ウィンドウに選択したドロップダウンウィジェットとドロップダウンの値を渡す
+    tab = parent.master
+    tab.last_selected_frame = parent
+    tab.last_selected_combobox = dropdown
+    print("最後に操作したドロップダウン:", tab.last_selected_combobox)
+
+    # 編集時使用ウィンドウの中央ラベルの更新
+    update_center_label(tab, label_center)
+
 
 # ドロップダウンの値を使用して、デフォルト値が入った、デフォルトのPythonコードを文字列で返す処理
 def get_default_code_from_dropdown(dropdown_value):
@@ -488,7 +526,7 @@ def get_default_code_from_dropdown(dropdown_value):
         defaults_cord = 'pyautogui.press("enter")'
 
     elif dropdown_value == "ショートカット":
-        defaults_cord = 'pyautogui.hotkey("ctrl", "c")'
+        defaults_cord = "pyautogui.hotkey('ctrl', 'c')"
 
     elif dropdown_value == "ドラッグ":
         defaults_cord = 'pyautogui.dragTo(200, 200, duration=1)'
@@ -502,12 +540,13 @@ def get_default_code_from_dropdown(dropdown_value):
 
 
 # ウィジェットの+ボタンが押されたときの処理
-def add_widget_below(current_frame, values):
+def add_widget_below(current_frame, values, label_center):
     # current_frame の親（縦に積んでいる container）
     parent = current_frame.master
 
     # 新しい行フレームを作る
     new_frame = tkinter.Frame(parent)
+    new_frame.entries = {}
 
     # current_frame の直後に挿入
     new_frame.pack(anchor='nw', after=current_frame)
@@ -520,13 +559,13 @@ def add_widget_below(current_frame, values):
     # ドロップダウン
     combo = ttk.Combobox(new_frame, values=values, state="readonly")
     combo.pack(side='left')
-    combo.bind("<<ComboboxSelected>>", lambda e: on_select(label=label, dropdown=combo, parent=new_frame))
+    combo.bind("<<ComboboxSelected>>", lambda e: on_select(label=label, dropdown=combo, parent=new_frame, label_center=label_center))
 
     # +ボタン（行追加）
     add_button = tkinter.Button(
         new_frame,
         text="+",
-        command=lambda f=new_frame: add_widget_below(f, values)
+        command=lambda f=new_frame: add_widget_below(f, values, label_center)
     )
     add_button.pack(side='left')
 
@@ -672,7 +711,7 @@ def on_entry_change_for_dropdown(_, dropdown_value, label_widget, dropdowns):
         label_widget.config(text=f'pyautogui.press("{values[0]}")')
 
     elif parsed_text["dropdown"] == "ショートカット":
-        label_widget.config(text=f'pyautogui.hotkey("{values[0]}")')
+        label_widget.config(text=f'pyautogui.hotkey({values[0]})')
 
     else:
         label_widget.config(text="# 不明なコード")
@@ -684,13 +723,13 @@ def apply_parsed_action(result, parent, cord_label):
     parse_action の戻り値 result をウィジェットに反映する
     """
 
-    print(result)
     # --- "何秒待つ" ---
     if result["dropdown"] == "何秒待つ":
         entry = tkinter.Entry(parent, width=5)
         entry.pack(side='left')
         entry.delete(0, "end")
         entry.insert(0, str(result["seconds"]))
+        parent.entries["seconds"] = entry
         entry.bind("<KeyRelease>", lambda e: on_entry_change(e, result["dropdown"], cord_label, [entry]))
 
         label = tkinter.Label(parent, text='秒待つ')
@@ -702,6 +741,7 @@ def apply_parsed_action(result, parent, cord_label):
         entry.pack(side='left')
         entry.delete(0, "end")
         entry.insert(0, str(result["text"]))
+        parent.entries["comment"] = entry
         entry.bind("<KeyRelease>", lambda e: on_entry_change_for_text(e, result["dropdown"], cord_label, [entry]))
 
         label = tkinter.Label(parent, text='処理のコメントを残す')
@@ -713,6 +753,7 @@ def apply_parsed_action(result, parent, cord_label):
         entry.pack(side='left')
         entry.delete(0, "end")
         entry.insert(0, str(result["text"]))
+        parent.entries["text"] = entry
         entry.bind("<KeyRelease>", lambda e: on_entry_change_for_text(e, result["dropdown"], cord_label, [entry]))
 
         label = tkinter.Label(parent, text='文字入力欄に文字を入力する')
@@ -720,12 +761,44 @@ def apply_parsed_action(result, parent, cord_label):
 
     # --- "キー入力" ---
     if result["dropdown"] == "キー入力":
-        dropdown = ttk.Combobox(parent, width=12, values=['enter', 'tab', 'space', 'backspace', 'up', 'down', 'left', 'right'])
+        dropdown = ttk.Combobox(parent,
+                                width=12,
+                                values=['enter', 'tab', 'space', 'backspace', 'up', 'down', 'left', 'right'],
+                                state="readonly")
         dropdown.pack(side='left')
         dropdown.set(str(result["key"]))
-        dropdown.bind("<<ComboboxSelected>>", lambda e: on_entry_change_for_dropdown(e, result["dropdown"], cord_label, [dropdown]))
+        dropdown.bind("<<ComboboxSelected>>", lambda e: on_entry_change_for_dropdown(e,
+                                                                                     result["dropdown"],
+                                                                                     cord_label,
+                                                                                     [dropdown]))
 
         label = tkinter.Label(parent, text='のキーを押す')
+        label.pack(side='left')
+
+    # --- "ショートカット" ---
+    if result["dropdown"] == "ショートカット":
+        dropdown = ttk.Combobox(parent,
+                                width=12,
+                                values=["'ctrl', 'c'",
+                                        "'ctrl', 'x'",
+                                        "'ctrl', 'v'",
+                                        "'ctrl', 'a'",
+                                        "'ctrl', 's'",
+                                        "'ctrl', 'n'",
+                                        "'ctrl', 'p'",
+                                        "'win', 'down'",
+                                        "'win', 'up'",
+                                        "'win', 'd'",
+                                        "'alt', 'tab'"],
+                                state="readonly")
+        dropdown.pack(side='left')
+        dropdown.set(", ".join(f"'{k}'" for k in result["keys"]))
+        dropdown.bind("<<ComboboxSelected>>", lambda e: on_entry_change_for_dropdown(e,
+                                                                                     result["dropdown"],
+                                                                                     cord_label,
+                                                                                     [dropdown]))
+
+        label = tkinter.Label(parent, text='のショートカットキーを押す')
         label.pack(side='left')
 
     # --- "どれくらいスクロール" ---
@@ -734,6 +807,7 @@ def apply_parsed_action(result, parent, cord_label):
         entry.pack(side='left')
         entry.delete(0, "end")
         entry.insert(0, str(result["amount"]))
+        parent.entries["amount"] = entry
         entry.bind("<KeyRelease>", lambda e: on_entry_change(e, result["dropdown"], cord_label, [entry]))
 
         label = tkinter.Label(parent, text='スクロール(例：－200＝下に200スクロール、300＝上に300スクロール)')
@@ -748,6 +822,11 @@ def apply_parsed_action(result, parent, cord_label):
         entry_x.pack(side='left')
         entry_x.delete(0, "end")
         entry_x.insert(0, str(result["x"]))
+        parent.entries["x"] = entry_x
+        # y と duration を後で参照するため、lambda 内で entry_y, entry_duration を後から束縛
+        # そのため先に空の変数を作る
+        entry_y = tkinter.Entry(parent, width=4)
+        entry_duration = tkinter.Entry(parent, width=4)
         entry_x.bind("<KeyRelease>", lambda e: on_entry_change(e,
                                                                result["dropdown"],
                                                                cord_label,
@@ -759,9 +838,9 @@ def apply_parsed_action(result, parent, cord_label):
         label_y = tkinter.Label(parent, text='y:')
         label_y.pack(side='left')
 
-        entry_y = tkinter.Entry(parent, width=4)
         entry_y.pack(side='left')
         entry_y.delete(0, "end")
+        parent.entries["y"] = entry_y
         entry_y.insert(0, str(result["y"]))
         entry_y.bind("<KeyRelease>", lambda e: on_entry_change(e,
                                                                result["dropdown"],
@@ -775,6 +854,7 @@ def apply_parsed_action(result, parent, cord_label):
         entry_duration.pack(side='left')
         entry_duration.delete(0, "end")
         entry_duration.insert(0, str(result["duration"]))
+        parent.entries["duration"] = entry_duration
         entry_duration.bind("<KeyRelease>", lambda e: on_entry_change(e,
                                                                       result["dropdown"],
                                                                       cord_label,
@@ -797,6 +877,7 @@ def apply_parsed_action(result, parent, cord_label):
         entry_x.pack(side='left')
         entry_x.delete(0, "end")
         entry_x.insert(0, str(result["x"]))
+        parent.entries["x"] = entry_x
         entry_x.bind("<KeyRelease>", lambda e: on_entry_change(e,
                                                                result["dropdown"],
                                                                cord_label,
@@ -812,6 +893,7 @@ def apply_parsed_action(result, parent, cord_label):
         entry_y.pack(side='left')
         entry_y.delete(0, "end")
         entry_y.insert(0, str(result["y"]))
+        parent.entries["y"] = entry_y
         entry_y.bind("<KeyRelease>", lambda e: on_entry_change(e,
                                                                result["dropdown"],
                                                                cord_label,
@@ -833,6 +915,7 @@ def apply_parsed_action(result, parent, cord_label):
         entry_x.pack(side='left')
         entry_x.delete(0, "end")
         entry_x.insert(0, str(result["x"]))
+        parent.entries["x"] = entry_x
         entry_x.bind("<KeyRelease>", lambda e: on_entry_change(e,
                                                                result["dropdown"],
                                                                cord_label,
@@ -848,6 +931,7 @@ def apply_parsed_action(result, parent, cord_label):
         entry_y.pack(side='left')
         entry_y.delete(0, "end")
         entry_y.insert(0, str(result["y"]))
+        parent.entries["y"] = entry_y
         entry_y.bind("<KeyRelease>", lambda e: on_entry_change(e,
                                                                result["dropdown"],
                                                                cord_label,
@@ -860,6 +944,7 @@ def apply_parsed_action(result, parent, cord_label):
         entry_duration.pack(side='left')
         entry_duration.delete(0, "end")
         entry_duration.insert(0, str(result["duration"]))
+        parent.entries["duration"] = entry_duration
         entry_duration.bind("<KeyRelease>", lambda e: on_entry_change(e,
                                                                       result["dropdown"],
                                                                       cord_label,
@@ -941,6 +1026,14 @@ def create_gui_window(title_name,
                                                        text=label_text_for_edit_file)
     label_for_edit_file_tab_decoration.pack()
 
+    # 編集時別ウィンドウで使用するため、最後に選択されたオブジェクトを記録するプロパティ
+    tab_for_edit_file.last_selected_combobox = None
+    tab_for_edit_file.last_selected_frame = None
+    # 編集時別ウィンドウの中央ラベル
+    edit_window = tkinter.Toplevel(root)
+    corner_frame = tkinter.Frame(edit_window)
+    label_center = tkinter.Label(corner_frame, text=str(tab_for_edit_file.last_selected_combobox), font=14)
+
     # フォルダ内のファイル一覧を取得
     files = os.listdir(folder_path)
     dropdown_for_edit_file = ttk.Combobox(frame_for_edit_file_tab_decoration,
@@ -951,9 +1044,140 @@ def create_gui_window(title_name,
                                 lambda event: edit_selected_file(dropdown=dropdown_for_edit_file,
                                                                  parent=tab_for_edit_file,
                                                                  values=choices,
-                                                                 folder_path=folder_path))
+                                                                 folder_path=folder_path,
+                                                                 label_center=label_center))
 
     # dropdown_for_edit_file.set('test2.py')
+
+    # --- 編集時に使用する別ウィンドウ ---
+    edit_window.title("x座標, y座標")
+    edit_window_width = 300
+    edit_window_height = 200
+    edit_window_x = screen_width - edit_window_width - 10
+    edit_window_y = 0
+    edit_window.geometry(f"{edit_window_width}x{edit_window_height}+{edit_window_x}+{edit_window_y}")
+
+    # 四隅配置用のフレーム
+    corner_frame.pack(expand=True, fill="both")
+
+    corner_frame.grid_rowconfigure(0, weight=1)
+    corner_frame.grid_rowconfigure(1, weight=1)
+    corner_frame.grid_columnconfigure(0, weight=1)
+    corner_frame.grid_columnconfigure(1, weight=1)
+
+    # 3×3 グリッドを作る
+    for r in range(3):
+        corner_frame.grid_rowconfigure(r, weight=1)
+    for c in range(3):
+        corner_frame.grid_columnconfigure(c, weight=1)
+
+    def auto_fill_xy(tab, x_value, y_value):
+        """最後に操作した行の x と y に自動入力する"""
+        frame = getattr(tab, "last_selected_frame", None)
+        if frame is None:
+            print("auto_fill_xy: 行が選択されていません")
+            return
+
+        if "x" in frame.entries:
+            frame.entries["x"].delete(0, "end")
+            frame.entries["x"].insert(0, str(x_value))
+
+        if "y" in frame.entries:
+            frame.entries["y"].delete(0, "end")
+            frame.entries["y"].insert(0, str(y_value))
+
+        print(f"auto_fill_xy: x={x_value}, y={y_value} を入力しました")
+
+    # 四隅の座標（IntVar）
+    left_top_x = tkinter.IntVar()
+    left_top_y = tkinter.IntVar()
+
+    right_top_x = tkinter.IntVar()
+    right_top_y = tkinter.IntVar()
+
+    left_bottom_x = tkinter.IntVar()
+    left_bottom_y = tkinter.IntVar()
+
+    right_bottom_x = tkinter.IntVar()
+    right_bottom_y = tkinter.IntVar()
+
+    # 四隅ラベル＋ボタン
+    # 左上
+    coord_label_left_top = tkinter.Label(corner_frame, text="左上", font=14)
+    coord_label_left_top.grid(row=0, column=0, sticky="nw")
+    btn_left_top = tkinter.Button(corner_frame, text="転記", command=lambda: auto_fill_xy(tab_for_edit_file, left_top_x.get(), left_top_y.get()))
+    btn_left_top.grid(row=0, column=0, sticky="sw")
+
+    # 右上
+    coord_label_right_top = tkinter.Label(corner_frame, text="右上", font=14)
+    coord_label_right_top.grid(row=0, column=2, sticky="ne")
+    btn_right_top = tkinter.Button(corner_frame, text="転記", command=lambda: auto_fill_xy(tab_for_edit_file, right_top_x.get(), right_top_y.get()))
+    btn_right_top.grid(row=0, column=2, sticky="se")
+
+    # 左下
+    coord_label_left_bottom = tkinter.Label(corner_frame, text="左下", font=14)
+    coord_label_left_bottom.grid(row=2, column=0, sticky="sw")
+    btn_left_bottom = tkinter.Button(corner_frame, text="転記", command=lambda: auto_fill_xy(tab_for_edit_file, left_bottom_x.get(), left_bottom_y.get()))
+    btn_left_bottom.grid(row=2, column=0, sticky="nw")
+
+    # 右下
+    coord_label_right_bottom = tkinter.Label(corner_frame, text="右下", font=14)
+    coord_label_right_bottom.grid(row=2, column=2, sticky="se")
+    btn_right_bottom = tkinter.Button(corner_frame, text="転記", command=lambda: auto_fill_xy(tab_for_edit_file, right_bottom_x.get(), right_bottom_y.get()))
+    btn_right_bottom.grid(row=2, column=2, sticky="ne")
+
+    # 中央ラベル
+    label_center.grid(row=1, column=1)
+
+    # 移動停止判定用
+    move_after_id = None
+
+    def update_coords():
+        """四隅の座標を取得してラベルに表示"""
+        x = edit_window.winfo_x()
+        y = edit_window.winfo_y()
+        w = edit_window.winfo_width()
+        h = edit_window.winfo_height()
+
+        # 四隅の座標
+        left_top_x_value, left_top_y_value = x, y
+        right_top_x_value, right_top_y_value = x + w, y
+        left_bottom_x_value, left_bottom_y_value = x, y + h
+        right_bottom_x_value, right_bottom_y_value = x + w, y + h
+
+        left_top_x.set(left_top_x_value)
+        left_top_y.set(left_top_y_value)
+        right_top_x.set(right_top_x_value)
+        right_top_y.set(right_top_y_value)
+        left_bottom_x.set(left_bottom_x_value)
+        left_bottom_y.set(left_bottom_y_value)
+        right_bottom_x.set(right_bottom_x_value)
+        right_bottom_y.set(right_bottom_y_value)
+
+        text_left_top = f"{left_top_x_value}, {left_top_y_value}"
+        text_right_top = f"{right_top_x_value}, {right_top_y_value}"
+        text_left_bottom = f"{left_bottom_x_value}, {left_bottom_y_value}"
+        text_right_bottom = f"{right_bottom_x_value}, {right_bottom_y_value}"
+
+        coord_label_left_top.config(text=text_left_top)
+        coord_label_right_top.config(text=text_right_top)
+        coord_label_left_bottom.config(text=text_left_bottom)
+        coord_label_right_bottom.config(text=text_right_bottom)
+
+    def on_move(event):
+        """ウィンドウ移動中に呼ばれる。停止したら座標更新。"""
+        nonlocal move_after_id
+
+        # 連続する Configure イベントをまとめる
+        if move_after_id is not None:
+            edit_window.after_cancel(str(move_after_id))
+
+        # 100ms 動きがなければ「移動完了」とみなす
+        move_after_id = edit_window.after(100, update_coords)
+
+
+    # Configure イベントで移動を監視
+    edit_window.bind("<Configure>", on_move)
 
     # 保存ボタンの処理
     def on_button_click():
@@ -981,6 +1205,7 @@ def create_gui_window(title_name,
     button_for_run_file = tkinter.Button(tab_for_run_file,
                                          text=tab_text_for_run_file,
                                          command=lambda: run_selected_file(
+                                            folder_path=folder_path,
                                             dropdown=dropdown_for_run_file))
     button_for_run_file.pack(anchor='nw')
 
@@ -1010,6 +1235,11 @@ def create_gui_window(title_name,
     label_for_setting = tkinter.Label(tab_for_setting, text=label_text_for_setting)
     label_for_setting.pack(anchor='nw')
 
+    # 編集時に使用する別ウィンドウの×ボタン（閉じるボタン）を押すと別ウィンドウを最小化
+    def minimize_window():
+        edit_window.iconify()
+    edit_window.protocol("WM_DELETE_WINDOW", minimize_window)
+
     # ドロップダウンが存在するタブ全体のイベントの設定
     def get_files():
         # フォルダの中のファイル名を取得
@@ -1022,10 +1252,16 @@ def create_gui_window(title_name,
         print("開いたタブ:", tab_text)
         if tab_text == tab_text_for_edit_file:
             dropdown_for_edit_file["values"] = get_files()
+            edit_window.deiconify()  # 編集時使用ウィンドウ表示
+            edit_window.attributes("-topmost", True)  # 編集時タブでは常に最前面に表示
         elif tab_text == tab_text_for_run_file:
             dropdown_for_run_file["values"] = get_files()
+            edit_window.withdraw()  # 編集時使用ウィンドウ非表示
         elif tab_text == tab_text_for_delete_file:
             dropdown_for_delete_file["values"] = get_files()
+            edit_window.withdraw()  # 編集時使用ウィンドウ非表示
+        else:
+            edit_window.withdraw()  # 編集時使用ウィンドウ非表示
 
     notebook.bind("<<NotebookTabChanged>>", on_tab_changed)
 
