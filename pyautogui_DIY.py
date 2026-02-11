@@ -172,11 +172,11 @@ class PressAction(Action):
     KEY_CHOICES = [
         "ctrl", "shift", "alt",
         "cmd", "win",
-        "a","b","c","d","e","f","g","h","i","j",
-        "k","l","m","n","o","p","q","r","s","t",
-        "u","v","w","x","y","z",
-        "enter","tab","space","esc","delete","backspace",
-        "up","down","left","right"
+        "a", "b", "c", "d", "e", "f", "g", "h", "i", "j",
+        "k", "l", "m", "n", "o", "p", "q", "r", "s", "t",
+        "u", "v", "w", "x", "y", "z",
+        "enter", "tab", "space", "esc", "delete", "backspace",
+        "up", "down", "left", "right"
     ]
 
     def __init__(self, key="enter"):
@@ -212,11 +212,11 @@ class HotkeyAction(Action):
     KEY_CHOICES = [
         "ctrl", "shift", "alt",
         "cmd", "win",
-        "a","b","c","d","e","f","g","h","i","j",
-        "k","l","m","n","o","p","q","r","s","t",
-        "u","v","w","x","y","z",
-        "enter","tab","space","esc","delete","backspace",
-        "up","down","left","right"
+        "a", "b", "c", "d", "e", "f", "g", "h", "i", "j",
+        "k", "l", "m", "n", "o", "p", "q", "r", "s", "t",
+        "u", "v", "w", "x", "y", "z",
+        "enter", "tab", "space", "esc", "delete", "backspace",
+        "up", "down", "left", "right"
     ]
 
     def __init__(self, keys=None):
@@ -408,7 +408,6 @@ class ActionParser:
         LoopAction,
     ]
 
-
     @classmethod
     def parse(cls, code: str) -> Action:
         code = code.strip()
@@ -424,17 +423,29 @@ class ActionParser:
 # ==============================
 
 class ActionFactory:
+    # ドロップダウン名 → Actionクラス の辞書を作成
     name_to_class = {
         a.dropdown_name: a
         for a in ActionParser.action_classes
     }
+    # 例：
+    # {
+    #   "何秒待つ": WaitAction,
+    #   "どれくらいスクロール": ScrollAction,
+    #   "どれくらいマウスを移動": MoveAction,
+    #   ...
+    # }
 
     @classmethod
     def from_dropdown(cls, name: str) -> Action:
+        # ドロップダウンで選ばれた名前からクラスを取得
         action_cls = cls.name_to_class.get(name)
+
+        # 見つからなければ UnknownAction を返す
         if not action_cls:
             return UnknownAction("# 不明なコード")
-        # デフォルトコンストラクタで生成
+
+        # 見つかったクラスをデフォルトコンストラクタで生成
         return action_cls()
 
 
@@ -442,15 +453,31 @@ class ActionFactory:
 # ActionRow（GUI の1行）
 # ==============================
 
+# class ActionRow:
+#     def __init__(self, parent, action, all_dropdown_values, on_changed=None, indent_level=0):
+#         self.indent_level = indent_level
+#         self.parent = parent
+#         self.action = action
+#         self.all_dropdown_values = all_dropdown_values
+#         self.on_changed = on_changed
+#
+#         self.frame = tk.Frame(parent, highlightthickness=0, bd=0, takefocus=0)
+#         self.frame.pack(fill="x", anchor="nw", pady=2)
 class ActionRow:
-    def __init__(self, parent, action: Action, all_dropdown_values, on_changed=None):
+    def __init__(self, parent, action, all_dropdown_values, on_changed=None, indent_level=0):
+        self.indent_level = indent_level
         self.parent = parent
         self.action = action
         self.all_dropdown_values = all_dropdown_values
         self.on_changed = on_changed
 
         self.frame = tk.Frame(parent, highlightthickness=0, bd=0, takefocus=0)
-        self.frame.pack(fill="x", anchor="nw", pady=2)
+        # ★ grid で配置する（行番号は EditorTab が後で設定）
+        # ここでは grid() を呼ばない
+
+        # GUI インデント（左側の余白）
+        self.indent_frame = tk.Frame(self.frame, width=self.indent_level * 20)
+        self.indent_frame.pack(side="left")
 
         # ★ import 文だけは特別扱い
         if isinstance(self.action, ImportAction):
@@ -461,9 +488,8 @@ class ActionRow:
         self.frame.bind("<<HotkeyChanged>>", self._on_entry_changed)
 
         # ===== 通常の ActionRow =====
-
-        # ラベル（コード表示）
-        self.label = tk.Label(self.frame, text=self.action.to_code(), anchor="w")
+        # ラベル（インデント付き）
+        self.label = tk.Label(self.frame, text=self._get_indented_code(), anchor="w")
         self.label.pack(anchor="nw")
 
         # ドロップダウン
@@ -482,7 +508,6 @@ class ActionRow:
         # アクション固有ウィジェット
         self.widgets = {}
         self._create_action_widgets()
-
 
     def _create_action_widgets(self):
         # 既存ウィジェット削除
@@ -581,6 +606,10 @@ class ActionRow:
 
     def refresh_label(self):
         self.label.config(text=self.action.to_code())
+
+    def _get_indented_code(self):
+        indent = "    " * self.indent_level  # 4スペース
+        return indent + self.action.to_code()
 
 
 # ==============================
@@ -1051,7 +1080,7 @@ class EditorTab:
 
         print(f"{filename} を読み込みました")
 
-    # 以下は既存のメソッド（変更なし）
+    # イベントハンドラ
     def on_row_changed(self, **kwargs):
         # フォーカスされた行
         if "focused" in kwargs:
@@ -1065,15 +1094,49 @@ class EditorTab:
         # 行削除
         if "deleted" in kwargs:
             self.rows = [r for r in self.rows if r is not kwargs["deleted"]]
+            self.redraw_rows()
 
-    def add_row(self, action: Action):
-        row = ActionRow(self.scrollable_frame, action, self.dropdown_values, on_changed=self.on_row_changed)
+    def add_row(self, action):
+        # デフォルトのインデントは 0（最上位）
+        indent = 0
+
+        # すでに行が存在する場合は、直前の行を参照してインデントを決める
+        if self.rows:
+            prev = self.rows[-1]  # 最後の行（直前の行）
+
+            # 直前の行が LoopAction（ループ開始）なら、
+            # その次の行はインデントを 1 段深くする
+            if isinstance(prev.action, LoopAction):
+                indent = prev.indent_level + 1
+            else:
+                # それ以外の行なら、同じインデントを引き継ぐ
+                indent = prev.indent_level
+
+        # 新しい ActionRow を作成してスクロールフレームに配置
+        row = ActionRow(
+            self.scrollable_frame,
+            action,
+            self.dropdown_values,
+            on_changed=self.on_row_changed,
+            indent_level=indent
+        )
+
+        # 行リストに追加
         self.rows.append(row)
+
+        self.redraw_rows()
+
+    def redraw_rows(self):
+        for i, row in enumerate(self.rows):
+            row.frame.grid(row=i, column=0, sticky="w", pady=2)
 
     def insert_row_after(self, target_row: ActionRow, action: Action):
         index = self.rows.index(target_row)
         row = ActionRow(self.scrollable_frame, action, self.dropdown_values, on_changed=self.on_row_changed)
         self.rows.insert(index + 1, row)
+
+        # ★ grid で並べ直す
+        self.redraw_rows()
 
     def add_empty_row(self):
         self.add_row(ActionFactory.from_dropdown("何秒待つ"))
@@ -1093,9 +1156,24 @@ class EditorTab:
         if not self.filepath:
             self.filepath = Path("output.py")
 
+        indent = 0
+        lines = []
+
+        for row in self.rows:
+            code = row.get_code()
+
+            # 繰り返し（LoopAction）の場合
+            if isinstance(row.action, LoopAction):
+                # ループ開始行を追加
+                lines.append(" " * indent + code)
+                indent += 4  # ← 次の行からインデント
+                continue
+
+            # 通常行
+            lines.append(" " * indent + code)
+
         with open(self.filepath, "w", encoding="utf-8") as f:
-            for row in self.rows:
-                f.write(row.get_code() + "\n")
+            f.write("\n".join(lines))
 
         print(f"保存しました: {self.filepath.resolve()}")
 
