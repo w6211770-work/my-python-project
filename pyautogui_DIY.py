@@ -389,6 +389,30 @@ class ImportAction(Action):
         return {}
 
 
+class IfAction(Action):
+    dropdown_name = "if文"
+
+    def __init__(self, condition="x > 0"):
+        self.condition = condition
+
+    @classmethod
+    def parse(cls, code: str):
+        code = code.strip()
+        m = re.match(r"if\s+(.+):", code)
+        if m:
+            return cls(m.group(1).strip())
+        return None
+
+    def to_code(self) -> str:
+        return f"if {self.condition}:"
+
+    def create_widgets(self, parent):
+        entry = tk.Entry(parent, width=30)
+        entry.insert(0, self.condition)
+        entry.pack(side="left")
+        return {"condition": entry}
+
+
 # ==============================
 # ActionParser
 # ==============================
@@ -406,6 +430,7 @@ class ActionParser:
         DragAction,
         CommentAction,
         LoopAction,
+        IfAction,
     ]
 
     @classmethod
@@ -428,6 +453,10 @@ class ActionFactory:
         a.dropdown_name: a
         for a in ActionParser.action_classes
     }
+
+    # a.dropdown_name: a
+    # 各Action.dropdown_name: 各Action
+
     # 例：
     # {
     #   "何秒待つ": WaitAction,
@@ -453,16 +482,6 @@ class ActionFactory:
 # ActionRow（GUI の1行）
 # ==============================
 
-# class ActionRow:
-#     def __init__(self, parent, action, all_dropdown_values, on_changed=None, indent_level=0):
-#         self.indent_level = indent_level
-#         self.parent = parent
-#         self.action = action
-#         self.all_dropdown_values = all_dropdown_values
-#         self.on_changed = on_changed
-#
-#         self.frame = tk.Frame(parent, highlightthickness=0, bd=0, takefocus=0)
-#         self.frame.pack(fill="x", anchor="nw", pady=2)
 class ActionRow:
     def __init__(self, parent, action, all_dropdown_values, on_changed=None, indent_level=0):
         self.indent_level = indent_level
@@ -489,7 +508,9 @@ class ActionRow:
 
         # ===== 通常の ActionRow =====
         # ラベル（インデント付き）
-        self.label = tk.Label(self.frame, text=self._get_indented_code(), anchor="w")
+        # self.label = tk.Label(self.frame, text=self._get_indented_code(), anchor="w")
+        # self.label.pack(anchor="nw")
+        self.label = tk.Label(self.frame, text=self.action.to_code(), anchor="w")
         self.label.pack(anchor="nw")
 
         # ドロップダウン
@@ -519,10 +540,6 @@ class ActionRow:
         self.widgets = self.action.create_widgets(self.frame)
 
         # 値変更時にラベル更新するためのバインド
-        for name, widget in self.widgets.items():
-            if isinstance(widget, tk.Entry):
-                widget.bind("<KeyRelease>", self._on_entry_changed)
-
         for name, widget in self.widgets.items():
             if isinstance(widget, tk.Entry):
                 widget.bind("<KeyRelease>", self._on_entry_changed)
@@ -577,6 +594,7 @@ class ActionRow:
             self.action.count = int(self.widgets["count"].get() or 0)
 
     def _on_select(self, event):
+        # ドロップダウンの値変更時の処理
         name = self.dropdown.get()
         self.action = ActionFactory.from_dropdown(name)
         self.label.config(text=self.action.to_code())
@@ -605,11 +623,12 @@ class ActionRow:
             self.on_changed(focused=self)
 
     def refresh_label(self):
-        self.label.config(text=self.action.to_code())
+        if hasattr(self, "label"):
+            self.label.config(text=self.action.to_code())
 
-    def _get_indented_code(self):
-        indent = "    " * self.indent_level  # 4スペース
-        return indent + self.action.to_code()
+    # def _get_indented_code(self):
+    #     indent = "    " * self.indent_level  # 4スペース
+    #     return indent + self.action.to_code()
 
 
 # ==============================
@@ -1082,37 +1101,51 @@ class EditorTab:
 
     # イベントハンドラ
     def on_row_changed(self, **kwargs):
-        # フォーカスされた行
-        if "focused" in kwargs:
-            self.current_row = kwargs["focused"]
-            return
-
         # 行追加
         if "add_after" in kwargs:
             self.insert_row_after(kwargs["add_after"], ActionFactory.from_dropdown("何秒待つ"))
+            self.normalize_indent()
 
         # 行削除
         if "deleted" in kwargs:
-            self.rows = [r for r in self.rows if r is not kwargs["deleted"]]
+            self.rows.remove(kwargs["deleted"])
+            self.normalize_indent()
             self.redraw_rows()
 
-    def add_row(self, action):
-        # デフォルトのインデントは 0（最上位）
-        indent = 0
+        # フォーカスされた行
+        if "focused" in kwargs:
+            self.current_row = kwargs["focused"]
 
-        # すでに行が存在する場合は、直前の行を参照してインデントを決める
-        if self.rows:
-            prev = self.rows[-1]  # 最後の行（直前の行）
+    def add_row(self, action, indent_level=0, index=None):
+        row = ActionRow(
+            self.scrollable_frame,
+            action,
+            self.dropdown_values,
+            on_changed=self.on_row_changed,
+            indent_level=indent_level
+        )
 
-            # 直前の行が LoopAction（ループ開始）なら、
-            # その次の行はインデントを 1 段深くする
-            if isinstance(prev.action, LoopAction):
-                indent = prev.indent_level + 1
-            else:
-                # それ以外の行なら、同じインデントを引き継ぐ
-                indent = prev.indent_level
+        if index is None:
+            self.rows.append(row)
+        else:
+            self.rows.insert(index, row)
 
-        # 新しい ActionRow を作成してスクロールフレームに配置
+        self.redraw_rows()
+
+    def redraw_rows(self):
+        # 行削除などで行順番が変わったときにウィジェットの順番更新のためウィジェット再描画
+        for i, row in enumerate(self.rows):
+            row.frame.grid(row=i, column=0, sticky="w", pady=2)
+
+    def insert_row_after(self, target_row: ActionRow, action: Action):
+        # 1. インデントを決める
+        if isinstance(target_row.action, (LoopAction, IfAction)):
+            indent = target_row.indent_level + 1
+        else:
+            indent = target_row.indent_level
+
+        # 2. 行を挿入
+        index = self.rows.index(target_row)
         row = ActionRow(
             self.scrollable_frame,
             action,
@@ -1120,39 +1153,53 @@ class EditorTab:
             on_changed=self.on_row_changed,
             indent_level=indent
         )
-
-        # 行リストに追加
-        self.rows.append(row)
-
-        self.redraw_rows()
-
-    def redraw_rows(self):
-        for i, row in enumerate(self.rows):
-            row.frame.grid(row=i, column=0, sticky="w", pady=2)
-
-    def insert_row_after(self, target_row: ActionRow, action: Action):
-        index = self.rows.index(target_row)
-        row = ActionRow(self.scrollable_frame, action, self.dropdown_values, on_changed=self.on_row_changed)
         self.rows.insert(index + 1, row)
 
-        # ★ grid で並べ直す
+        # 3. 再描画
         self.redraw_rows()
 
+    def normalize_indent(self):
+        indent = 0
+        for row in self.rows:
+            row.indent_level = indent
+            row.refresh_label()
+            row.indent_frame.config(width=row.indent_level * 20)
+
+            # ブロック開始なら次の行は深くする
+            if isinstance(row.action, (LoopAction, IfAction)):
+                indent += 1
+
+            # ブロック終了なら浅くする（次の行で反映される）
+            if row.action.to_code().strip().endswith("end"):
+                indent = max(indent - 1, 0)
+
     def add_empty_row(self):
-        self.add_row(ActionFactory.from_dropdown("何秒待つ"))
+        # デフォルトで行挿入
+        # 最終行のインデントに合わせる
+        indent = self.rows[-1].indent_level if self.rows[-1] else 0
 
-    def load_file(self, filepath: Path):
-        with open(filepath, "r", encoding="utf-8") as f:
-            lines = f.readlines()
+        self.add_row(
+            ActionFactory.from_dropdown("何秒待つ"),
+            indent_level=indent
+        )
 
-        for line in lines:
-            code = line.strip()
-            if not code:
-                continue
-            action = ActionParser.parse(code)
-            self.add_row(action)
+    def load_file(self, path: Path):
+        self.rows.clear()
+        text = path.read_text(encoding="utf-8")
+        for line in text.splitlines():
+            # タブやスペース幅に合わせて調整する場合はここを変更
+            stripped = line.lstrip()
+            if stripped == "":
+                indent_level = 0
+            else:
+                indent_spaces = len(line) - len(stripped)
+                indent_level = indent_spaces // 4
+
+            action = ActionParser.parse(stripped)
+            self.add_row(action, indent_level=indent_level)
 
     def save_file(self):
+        # 現在のウィジェット内容でファイル保存
         if not self.filepath:
             self.filepath = Path("output.py")
 
@@ -1178,12 +1225,15 @@ class EditorTab:
         print(f"保存しました: {self.filepath.resolve()}")
 
     def refresh_file_dropdown(self):
+        # ドロップダウンの値更新
         self.file_dropdown["values"] = self.get_python_files()
 
     def minimize_edit_window(self):
+        # 編集時使用ウィンドウ画面最小化
         self.edit_window.iconify()
 
     def transposing_xy_values(self, x, y):
+        # 編集時使用ウィンドウからｘ座標とｙ座標転記
         if not self.current_row:
             print("行が選択されていません")
             return
