@@ -1,0 +1,36 @@
+import pyautogui
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+pyautogui.moveTo(1500, 1000)
+
+
+
+
+

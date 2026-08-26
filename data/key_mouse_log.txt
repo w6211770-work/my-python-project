@@ -1,0 +1,5 @@
+import pyautogui
+import time
+pyautogui.PAUSE = 0.3
+time.sleep(1)
+pyautogui.click(1595, 23, button='left')

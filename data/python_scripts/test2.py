@@ -1,0 +1,5 @@
+time.sleep(1)
+pyautogui.scroll(-200)
+pyautogui.moveTo(100, 200, duration=5)
+time.sleep(1)
+pyautogui.scroll(100)
