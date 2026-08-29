@@ -1,0 +1,6 @@
+{
+    "window_size": [1200, 800],
+    "theme": "dark",
+    "script_folder": "python_scripts",
+    "log_level": "debug"
+}

@@ -3,9 +3,10 @@ from tkinter import ttk
 import re
 from pathlib import Path
 import os
-from key_mouse_log import InputMonitor
-from key_mouse_log import KeyMouseLogProcessor
+from core.key_mouse_log import InputMonitor
+from core.key_mouse_log import KeyMouseLogProcessor
 import threading
+from core.path_resolver import PathResolver
 
 
 # ==============================
@@ -640,8 +641,6 @@ class MainWindow:
     def __init__(self, root):
         self.root = root
         self.root.title("pyautogui DIY OOP版")
-        # # 閉じるイベントを登録
-        # self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
         # ログファイル（固定）
         base_dir = Path(__file__).resolve().parent.parent
@@ -716,43 +715,6 @@ class MainWindow:
     def refresh_editor_file_list(self):
         self.editor_tab.refresh_file_dropdown()
 
-    # def on_close(self):
-    #     print("ウィンドウを閉じます。記録を停止します。")
-    #
-    #     # 記録中なら停止
-    #     if hasattr(self, "monitor"):
-    #         self.monitor.stop()
-    #
-    #     # 記録スレッドが動いているなら join して待つ
-    #     if hasattr(self, "monitor_thread"):
-    #         self.monitor_thread.join()
-    #
-    #     # ログ変換
-    #     processor = KeyMouseLogProcessor(self.log_file_path)
-    #     processor.run(self.output_py_path)
-    #
-    #     # Tkinter を終了
-    #     self.root.quit()
-    #     self.root.destroy()
-
-
-    # def on_close(self):
-    #     print("ウィンドウを閉じます。記録を停止します。")
-    #
-    #     if hasattr(self, "monitor"):
-    #         self.monitor.stop()
-    #
-    #     if hasattr(self, "monitor_thread"):
-    #         self.monitor_thread.join()
-    #
-    #     # ★ MainWindow が持っている値を使う
-    #     if self.output_py_path:
-    #         processor = KeyMouseLogProcessor(str(self.log_file_path))
-    #         processor.run(str(self.output_py_path))
-    #
-    #     self.root.quit()
-    #     self.root.destroy()
-
 
 class CreateTab:
     def __init__(self, notebook, main_window):
@@ -764,118 +726,31 @@ class CreateTab:
         self.entry.pack(anchor="w")
 
         tk.Button(self.frame, text="作成", command=self.create_file).pack(anchor="w")
-
-
         tk.Button(self.frame, text="終了", command=self.quit_log).pack(anchor="w")
 
-
     # def create_file(self):
     #     name = self.entry.get().strip()
     #     if not name:
     #         print("ファイル名が空です")
     #         return
     #
-    #     # ★ python_scripts フォルダに保存する
-    #     folder = Path("python_scripts")
-    #     folder.mkdir(exist_ok=True)
-    #
-    #     path = folder / f"{name}.py"
-    #
-    #     # with open(path, "w", encoding="utf-8") as f:
-    #     #     f.write("import pyautogui\nimport time\n\n")
-    #     key_mouse_log_file_name = path
-    #     monitor = InputMonitor(key_mouse_log_file_name)
-    #     monitor.start()
-    #
-    #     processor = KeyMouseLogProcessor(key_mouse_log_file_name)
-    #     processor.run()
-    #
-    #     print(f"{path} を作成しました")
-    # def create_file(self):
-    #     name = self.entry.get().strip()
-    #     if not name:
-    #         print("ファイル名が空です")
-    #         return
-    #
-    #     # python_scripts フォルダに保存する
-    #     folder = Path("python_scripts")
-    #     folder.mkdir(exist_ok=True)
-    #
-    #     # 新規作成する .py ファイル
-    #     path = folder / f"{name}.py"
-    #
-    #     # ★ ログファイルは data フォルダに置く
-    #     base_dir = Path(__file__).resolve().parent.parent  # your_app/
-    #     # log_file_path = base_dir / "data" / "key_mouse_log.txt"
-    #     log_file_path = base_dir / "data" / f"{name}.py"
-    #
-    #     # ★ InputMonitor に渡すのはログファイルのパス
-    #     monitor = InputMonitor(str(log_file_path))
-    #     monitor.start()
-    #
-    #     processor = KeyMouseLogProcessor(str(log_file_path))
-    #     processor.run()
-    #
-    #     print(f"{path} を作成しました")
-    # def create_file(self):
-    #     name = self.entry.get().strip()
-    #     if not name:
-    #         print("ファイル名が空です")
-    #         return
-    #
-    #     # プロジェクトルート
     #     base_dir = Path(__file__).resolve().parent.parent
-    #
-    #     # ログファイル
-    #     log_file_path = base_dir / "data" / "key_mouse_log.txt"
-    #
-    #     # 出力先フォルダ
     #     scripts_folder = base_dir / "data" / "python_scripts"
     #     scripts_folder.mkdir(parents=True, exist_ok=True)
     #
-    #     # 出力 .py ファイル
-    #     output_py_path = scripts_folder / f"{name}.py"
+    #     # ★ MainWindow に出力先を渡す
+    #     self.main_window.output_py_path = scripts_folder / f"{name}.py"
     #
-    #     # 入力監視（ログを作成）
-    #     monitor = InputMonitor(str(log_file_path))
-    #     monitor.start()
-    #
-    #     # ログ → .py に変換
-    #     processor = KeyMouseLogProcessor(str(log_file_path))
-    #     processor.run(str(output_py_path))
-    #
-    #     print(f"{output_py_path} を作成しました")
-        import threading
-
+    #     # ★ MainWindow の log_file_path を使う
+    #     log_file_path = self.main_window.log_file_path
     def create_file(self):
         name = self.entry.get().strip()
         if not name:
             print("ファイル名が空です")
             return
 
-        # base_dir = Path(__file__).resolve().parent.parent
-        #
-        # log_file_path = base_dir / "data" / "key_mouse_log.txt"
-        # scripts_folder = base_dir / "data" / "python_scripts"
-        # scripts_folder.mkdir(parents=True, exist_ok=True)
-        #
-        # output_py_path = scripts_folder / f"{name}.py"
-        #
-        # # ★ InputMonitor を別スレッドで実行
-        # def run_monitor():
-        #     monitor = InputMonitor(str(log_file_path))
-        #     monitor.start()
-        #
-        #     processor = KeyMouseLogProcessor(str(log_file_path))
-        #     processor.run(str(output_py_path))
-        #
-        #     print(f"{output_py_path} を作成しました")
-        #
-        # threading.Thread(target=run_monitor, daemon=True).start()
-
-
-        base_dir = Path(__file__).resolve().parent.parent
-        scripts_folder = base_dir / "data" / "python_scripts"
+        # python_scripts フォルダ（PathResolver で一元管理）
+        scripts_folder = PathResolver.PYTHON_SCRIPTS_DIR
         scripts_folder.mkdir(parents=True, exist_ok=True)
 
         # ★ MainWindow に出力先を渡す
@@ -883,6 +758,8 @@ class CreateTab:
 
         # ★ MainWindow の log_file_path を使う
         log_file_path = self.main_window.log_file_path
+
+        print(f"{name} .pyを作成します")
 
         # 記録開始
         def run_monitor():
@@ -919,11 +796,24 @@ class RunTab:
 
         tk.Button(self.frame, text="実行", command=self.run_file).pack(anchor="w")
 
+    # def get_files(self):
+    #     folder = Path("python_scripts")
+    #     if not folder.exists():
+    #         return []
+    #     return [str(p.name) for p in folder.glob("*.py")]
+    # def get_files(self):
+    #     base = Path(__file__).resolve().parent  # core フォルダ
+    #     folder = base.parent / "data" / "python_scripts"
+    #
+    #     if not folder.exists():
+    #         return []
+    #
+    #     return [p.name for p in folder.glob("*.py")]
+    # def get_files(self):
+    #     folder = PathResolver.PYTHON_SCRIPTS_DIR
+    #     return [p.name for p in folder.glob("*.py")]
     def get_files(self):
-        folder = Path("python_scripts")
-        if not folder.exists():
-            return []
-        return [str(p.name) for p in folder.glob("*.py")]
+        return PathResolver.list_python_scripts()
 
     def refresh_file_dropdown(self):
         self.dropdown["values"] = self.get_files()
@@ -954,30 +844,74 @@ class DeleteTab:
 
         tk.Button(self.frame, text="削除", command=self.delete_file).pack(anchor="w")
 
+    # def get_files(self):
+    #     folder = Path("python_scripts")
+    #     if not folder.exists():
+    #         return []
+    #     return [str(p.name) for p in folder.glob("*.py")]
+    # def get_files(self):
+    #     base = Path(__file__).resolve().parent  # core フォルダ
+    #     folder = base.parent / "data" / "python_scripts"
+    #
+    #     if not folder.exists():
+    #         return []
+    #
+    #     return [p.name for p in folder.glob("*.py")]
+    # def get_files(self):
+    #     folder = PathResolver.PYTHON_SCRIPTS_DIR
+    #     return [p.name for p in folder.glob("*.py")]
     def get_files(self):
-        folder = Path("python_scripts")
-        if not folder.exists():
-            return []
-        return [str(p.name) for p in folder.glob("*.py")]
+        return PathResolver.list_python_scripts()
 
+    # def delete_file(self):
+    #     filename = self.dropdown.get()
+    #     if not filename:
+    #         print("ファイルが選択されていません")
+    #         return
+    #
+    #     path = Path("python_scripts") / filename
+    #
+    #     if path.exists():
+    #         path.unlink()
+    #         print(f"{filename} を削除しました")
+    #
+    #         # ★ ドロップダウンの値を更新
+    #         self.refresh_file_dropdown()
+    #
+    #         # ★ 選択状態をクリア
+    #         self.dropdown.set("")
+    #
+    #     else:
+    #         print("ファイルが存在しません")
+    # def delete_file(self):
+    #     filename = self.dropdown.get()
+    #     if not filename:
+    #         print("ファイルが選択されていません")
+    #         return
+    #
+    #     base = Path(__file__).resolve().parent  # core フォルダ
+    #     path = base.parent / "data" / "python_scripts" / filename
+    #
+    #     if path.exists():
+    #         path.unlink()
+    #         print(f"{filename} を削除しました")
+    #         self.dropdown["values"] = self.get_files()
+    #         self.dropdown.set("")
+    #     else:
+    #         print("ファイルが存在しません")
     def delete_file(self):
         filename = self.dropdown.get()
         if not filename:
             print("ファイルが選択されていません")
             return
 
-        path = Path("python_scripts") / filename
+        path = PathResolver.script_path(filename)
 
         if path.exists():
             path.unlink()
             print(f"{filename} を削除しました")
-
-            # ★ ドロップダウンの値を更新
-            self.refresh_file_dropdown()
-
-            # ★ 選択状態をクリア
+            self.dropdown["values"] = self.get_files()
             self.dropdown.set("")
-
         else:
             print("ファイルが存在しません")
 
@@ -1070,15 +1004,30 @@ class EditorTab:
         # マウスホイールスクロール対応
         # ============================
 
+        # def _on_mousewheel(event):
+        #     canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        #
+        # # Windows / Mac
+        # canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        #
+        # # Linux（必要なら）
+        # canvas.bind_all("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
+        # canvas.bind_all("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))
+        def on_scroll(*args):
+            canvas.yview(*args)
+            first, last = canvas.yview()
+            if first <= 0:
+                canvas.yview_moveto(0)
+
+        scrollbar.config(command=on_scroll)
+        canvas.config(yscrollcommand=scrollbar.set)
+
         def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            on_scroll("scroll", int(-event.delta / 120), "units")
 
-        # Windows / Mac
         canvas.bind_all("<MouseWheel>", _on_mousewheel)
-
-        # Linux（必要なら）
-        canvas.bind_all("<Button-4>", lambda e: canvas.yview_scroll(-1, "units"))
-        canvas.bind_all("<Button-5>", lambda e: canvas.yview_scroll(1, "units"))
+        canvas.bind_all("<Button-4>", lambda e: on_scroll("scroll", -1, "units"))
+        canvas.bind_all("<Button-5>", lambda e: on_scroll("scroll", 1, "units"))
 
         # -------------------------
         # ドロップダウン候補
@@ -1240,21 +1189,79 @@ class EditorTab:
     # ★ 追加：python_scripts 内の .py ファイル一覧取得
     # ============================================================
     @staticmethod
+    # def get_python_files():
+    #     folder = Path("python_scripts")
+    #     if not folder.exists():
+    #         return []
+    #     return [str(p.name) for p in folder.glob("*.py")]
+    # def get_python_files():
+    #     base = Path(__file__).resolve().parent  # core フォルダ
+    #     folder = base.parent / "data" / "python_scripts"
+    #
+    #     if not folder.exists():
+    #         return []
+    #
+    #     return [p.name for p in folder.glob("*.py")]
     def get_python_files():
-        folder = Path("python_scripts")
-        if not folder.exists():
-            return []
-        return [str(p.name) for p in folder.glob("*.py")]
+        folder = PathResolver.PYTHON_SCRIPTS_DIR
+        return [p.name for p in folder.glob("*.py")]
 
     # ============================================================
     # ★ 追加：ファイル選択時の処理
     # ============================================================
+    # def on_file_selected(self, event):
+    #     filename = self.file_dropdown.get()
+    #     if not filename:
+    #         return
+    #
+    #     filepath = Path("python_scripts") / filename
+    #     if not filepath.exists():
+    #         print("ファイルが存在しません")
+    #         return
+    #
+    #     # 既存の行をすべて削除
+    #     for row in self.rows:
+    #         row.frame.destroy()
+    #     self.rows.clear()
+    #
+    #     # 新しいファイルを読み込む
+    #     self.filepath = filepath
+    #     self.load_file(filepath)
+    #
+    #     print(f"{filename} を読み込みました")
+    # def on_file_selected(self, event):
+    #     filename = self.file_dropdown.get()
+    #     if not filename:
+    #         return
+    #
+    #     # core フォルダのパス
+    #     base = Path(__file__).resolve().parent
+    #
+    #     # data/python_scripts のパス
+    #     filepath = base.parent / "data" / "python_scripts" / filename
+    #
+    #     if not filepath.exists():
+    #         print("ファイルが存在しません")
+    #         return
+    #
+    #     # 既存の行をすべて削除
+    #     for row in self.rows:
+    #         row.frame.destroy()
+    #     self.rows.clear()
+    #
+    #     # 新しいファイルを読み込む
+    #     self.filepath = filepath
+    #     self.load_file(filepath)
+    #
+    #     print(f"{filename} を読み込みました")
     def on_file_selected(self, event):
         filename = self.file_dropdown.get()
         if not filename:
             return
 
-        filepath = Path("python_scripts") / filename
+        # PathResolver でパスを取得
+        filepath = PathResolver.script_path(filename)
+
         if not filepath.exists():
             print("ファイルが存在しません")
             return

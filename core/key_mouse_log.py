@@ -3,6 +3,7 @@ from pynput import mouse
 import time
 import re
 import os
+from core.path_resolver import PathResolver
 
 
 VK_TO_CHAR = {
@@ -67,7 +68,8 @@ class MouseDetector:
         self.is_dragging = False
         self.start_pos = None
 
-    def extract_button_name(self, button):
+    @staticmethod
+    def extract_button_name(button):
         return str(button).split('.')[-1]
 
     def on_click(self, x, y, button, pressed):
@@ -107,7 +109,8 @@ class KeyboardDetector:
         self.key_states = {}  # 押下状態を管理（True=押されている）
         self.hotkeys = hotkeys or {}
 
-    def normalize_key(self, key):
+    @staticmethod
+    def normalize_key(key):
         # 特殊キー
         if isinstance(key, keyboard.Key):
             return str(key).replace("Key.", "")
@@ -279,7 +282,8 @@ class KeyMouseLogProcessor:
             for ck in self.CTRL_KEYS
         )
 
-    def extract_key_from_line(self, line: str, kind: str) -> str | None:
+    @staticmethod
+    def extract_key_from_line(line: str, kind: str) -> str | None:
         # kind: "keyDown" or "keyUp"
         m = re.findall(rf"{kind}\(['\"](.+?)['\"]\)", line)
         return m[0] if m else None
@@ -330,43 +334,27 @@ class KeyMouseLogProcessor:
             # 通常行
             self.output.append(stripped)
 
-    # def save(self):
-    #     with open(self.file_path, "w", encoding="utf-8") as f:
-    #         f.write("\n".join(self.output))
     def save(self, output_path: str):
         with open(output_path, "w", encoding="utf-8") as f:
             f.write("\n".join(self.output))
 
-    # def run(self):
-    #     self.load()
-    #     self.process()
-    #     self.save()
-    #     print("修正完了：Ctrl離し判定を最優先にして、誤判定を完全に防ぎました。")
     def run(self, output_path: str):
         self.load()
         self.process()
         self.save(output_path)
-        print("変換完了：.py ファイルを生成しました")
+        print(f"変換完了：{output_path} ファイルを生成しました")
+
 
 # ============================
 # 実行
 # ============================
-#
-# if __name__ == "__main__":
-#     base_dir = os.path.dirname(os.path.abspath(__file__))
-#     log_file_path = os.path.join(base_dir, "data", "key_mouse_log.txt")
-#     key_mouse_log_file_name = log_file_path
-#     monitor = InputMonitor(key_mouse_log_file_name)
-#     monitor.start()
-#
-#     processor = KeyMouseLogProcessor(key_mouse_log_file_name)
-#     processor.run()
 if __name__ == "__main__":
-    # ★ core の 1 つ上のフォルダ（プロジェクトルート）を取得
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-    # ★ data/key_mouse_log.txt を絶対パスで指定
-    log_file_path = os.path.join(project_root, "data", "key_mouse_log.txt")
+    # # ★ core の 1 つ上のフォルダ（プロジェクトルート）を取得
+    # project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    #
+    # # ★ data/key_mouse_log.txt を絶対パスで指定
+    # log_file_path = os.path.join(project_root, "data", "key_mouse_log.txt")
+    log_file_path = PathResolver.KEY_MOUSE_LOG_FILE
 
     # ★ InputMonitor と Processor に絶対パスを渡す
     monitor = InputMonitor(log_file_path)
